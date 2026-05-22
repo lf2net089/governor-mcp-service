@@ -15,7 +15,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MCP_SERVICE_DIR="$SCRIPT_DIR/mcp-service"
 MCP_CONFIG="$HOME/.gemini/antigravity/mcp_config.json"
-SERVICE_URL="http://localhost:8080"
+
+# 從 .env 讀取 MCP_PORT，預設值為 9090
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  MCP_PORT=$(grep "^MCP_PORT=" "$SCRIPT_DIR/.env" | cut -d'=' -f2 | xargs)
+else
+  MCP_PORT="9090"
+fi
+SERVICE_URL="http://localhost:$MCP_PORT"
 MAX_WAIT=60   # 最多等待 60 秒
 
 # ── 顏色 ──────────────────────────────────────────────────
@@ -49,6 +56,10 @@ success "data 目錄就緒：$MCP_SERVICE_DIR/data/"
 # ── Step 2: 建立並啟動 Docker ─────────────────────────────
 info "Step 2/5 — 建立 Docker Image（首次約需 2-3 分鐘）..."
 cd "$MCP_SERVICE_DIR"
+# 載入 .env 環境變數
+set -a
+source "$SCRIPT_DIR/.env"
+set +a
 docker compose build --quiet
 success "Docker Image 建立完成"
 
@@ -100,7 +111,7 @@ with open(config_path, 'r') as f:
     config = json.load(f)
 
 config.setdefault('mcpServers', {})['system-governor'] = {
-    "url": "http://localhost:8080/mcp",
+    "url": "http://localhost:$MCP_PORT/mcp",
     "disabled": False
 }
 
@@ -115,7 +126,7 @@ PYEOF
 import json, os, sys
 p = os.environ['MCP_CONFIG_PATH']
 with open(p) as f: c = json.load(f)
-c.setdefault('mcpServers', {})['system-governor'] = {'url': 'http://localhost:8080/mcp', 'disabled': False}
+c.setdefault('mcpServers', {})['system-governor'] = {'url': 'http://localhost:$MCP_PORT/mcp', 'disabled': False}
 with open(p, 'w') as f: json.dump(c, f, indent=2, ensure_ascii=False); f.write('\n')
 print('✅ mcp_config.json 更新完成')
 " 2>/dev/null || warn "自動寫入失敗，請手動加入（見上方說明）"

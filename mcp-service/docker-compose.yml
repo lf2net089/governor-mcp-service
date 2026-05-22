@@ -3,21 +3,20 @@ services:
     build: .
     container_name: system-governor-mcp
     ports:
-      - "8080:8080"
+      - "${MCP_PORT:-9090}:${MCP_PORT:-9090}"
     volumes:
       # Persistent data: SQLite DB + generated reports
-      - ./data:/data
+      - ./data:${DATA_DIR:-/data}
     environment:
-      - DATA_DIR=/data
-      - DB_PATH=/data/governor.db
-      - REPORTS_DIR=/data/reports
-      - MCP_HOST=0.0.0.0
-      - MCP_PORT=8080
-      # Reminder threshold: minutes without sg_record_input before warning
-      - REMINDER_THRESHOLD_MINUTES=10
+      - DATA_DIR=${DATA_DIR:-/data}
+      - DB_PATH=${DB_PATH:-/data/governor.db}
+      - REPORTS_DIR=${REPORTS_DIR:-/data/reports}
+      - MCP_HOST=${MCP_HOST:-0.0.0.0}
+      - MCP_PORT=${MCP_PORT:-9090}
+      - REMINDER_THRESHOLD_MINUTES=${REMINDER_THRESHOLD_MINUTES:-10}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://${MCP_HOST}:${MCP_PORT}/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
