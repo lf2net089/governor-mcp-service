@@ -21,6 +21,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MCP_SERVICE_DIR="$SCRIPT_DIR/governor"
 MCP_CONFIG="$HOME/.gemini/antigravity/mcp_config.json"
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+CLAUDE_RULE_FILE="$HOME/.claude/CLAUDE.md"
 
 # 狀態和日誌檔案
 STATUS_FILE="$SCRIPT_DIR/.install_status"
@@ -91,8 +93,9 @@ show_checklist() {
     "docker_start:Docker 容器啟動"
     "health_check:健康檢查"
     "mcp_config:MCP 配置寫入"
+    "claude_settings:配置 Claude Code 設定"
+    "inject_rules:注入 Agent 規則"
     "verify_tools:工具驗證"
-    "agent_rules:Agent 規則指南"
   )
 
   for step_info in "${steps[@]}"; do
@@ -247,9 +250,118 @@ PYEOF
     success "MCP 配置 (已完成，跳過)"
   fi
 
-  # ── Step 6: 工具驗證 ──────────────────────────────────────
+  # ── Step 7: Claude Code Settings ───────────────────────────
+  if ! step_completed "claude_settings"; then
+    info "Step 7/9 — 配置 Claude Code 設定..."
+
+    if [ ! -d "$HOME/.claude" ]; then
+      mkdir -p "$HOME/.claude"
+      success "建立 ~/.claude 目錄"
+    fi
+
+    if [ ! -f "$CLAUDE_SETTINGS" ]; then
+      # 建立新的 settings.json
+      python3 - <<PYEOF >> "$LOG_FILE" 2>&1
+import json, os
+settings_path = os.path.expanduser("~/.claude/settings.json")
+settings = {
+    "mcpServers": {
+        "system-governor": {
+            "url": "http://localhost:$MCP_PORT/mcp",
+            "disabled": False
+        }
+    }
+}
+with open(settings_path, 'w') as f:
+    json.dump(settings, f, indent=2, ensure_ascii=False)
+    f.write('\n')
+PYEOF
+      if [ $? -eq 0 ]; then
+        success "建立 ~/.claude/settings.json"
+      else
+        warn "無法建立 ~/.claude/settings.json"
+      fi
+    else
+      # 更新現有的 settings.json
+      if grep -q '"system-governor"' "$CLAUDE_SETTINGS" 2>/dev/null; then
+        warn "system-governor 已存在於 settings.json，跳過"
+      else
+        cp "$CLAUDE_SETTINGS" "${CLAUDE_SETTINGS}.backup.$(date +%Y%m%d%H%M%S)"
+        python3 - <<PYEOF >> "$LOG_FILE" 2>&1
+import json, os
+settings_path = os.path.expanduser("~/.claude/settings.json")
+with open(settings_path, 'r') as f:
+    settings = json.load(f)
+if 'mcpServers' not in settings:
+    settings['mcpServers'] = {}
+settings['mcpServers']['system-governor'] = {
+    "url": "http://localhost:$MCP_PORT/mcp",
+    "disabled": False
+}
+with open(settings_path, 'w') as f:
+    json.dump(settings, f, indent=2, ensure_ascii=False)
+    f.write('\n')
+PYEOF
+        if [ $? -eq 0 ]; then
+          success "MCP 已注入 ~/.claude/settings.json"
+        else
+          warn "無法更新 ~/.claude/settings.json"
+        fi
+      fi
+    fi
+
+    save_step_status "claude_settings" "completed"
+  else
+    success "Claude Code 設定 (已完成，跳過)"
+  fi
+
+  # ── Step 8: 注入 Agent 規則 ───────────────────────────────
+  if ! step_completed "inject_rules"; then
+    info "Step 8/9 — 注入 Agent 規則到 CLAUDE.md..."
+
+    TEMPLATE_FILE="$SCRIPT_DIR/SYSTEM_GOVERNOR_RULE_TEMPLATE.md"
+
+    if [ ! -f "$TEMPLATE_FILE" ]; then
+      warn "找不到規則模板：$TEMPLATE_FILE，跳過注入"
+      save_step_status "inject_rules" "completed"
+    else
+      # 從模板中提取 Claude Code 規則（第 25-123 行）
+      RULES_TO_INJECT=$(sed -n '25,123p' "$TEMPLATE_FILE")
+
+      if [ ! -f "$CLAUDE_RULE_FILE" ]; then
+        # 建立新的 CLAUDE.md
+        cat > "$CLAUDE_RULE_FILE" <<'EOF'
+# Claude Code — 全域配置規則
+
+> 自動由 System Governor 安裝程序生成
+
+EOF
+        echo "$RULES_TO_INJECT" >> "$CLAUDE_RULE_FILE"
+        success "建立並注入規則到 ~/.claude/CLAUDE.md"
+      else
+        # 檢查規則是否已存在
+        if grep -q "System Governor MCP" "$CLAUDE_RULE_FILE" 2>/dev/null; then
+          warn "System Governor 規則已存在於 CLAUDE.md，跳過"
+        else
+          # 備份現有文件
+          cp "$CLAUDE_RULE_FILE" "${CLAUDE_RULE_FILE}.backup.$(date +%Y%m%d%H%M%S)"
+
+          # 在文件末尾添加規則
+          echo "" >> "$CLAUDE_RULE_FILE"
+          echo "$RULES_TO_INJECT" >> "$CLAUDE_RULE_FILE"
+          success "注入規則到 ~/.claude/CLAUDE.md"
+        fi
+      fi
+    fi
+
+    save_step_status "inject_rules" "completed"
+  else
+    success "Agent 規則注入 (已完成，跳過)"
+  fi
+
+  # ── Step 9: 工具驗證 ──────────────────────────────────────
   if ! step_completed "verify_tools"; then
-    info "Step 6/6 — 驗證工具..."
+    info "驗證工具..."
 
     HEALTH=$(curl -sf "${SERVICE_URL}/health" 2>/dev/null || echo "{}")
     if echo "$HEALTH" | grep -q '"status":"ok"'; then
@@ -260,69 +372,6 @@ PYEOF
     fi
   else
     success "工具驗證 (已完成，跳過)"
-  fi
-
-  # ── Agent 規則集成指南 ─────────────────────────────────────
-  if ! step_completed "agent_rules"; then
-    info "配置 Agent 規則..."
-
-    CLAUDE_RULE_FILE="$HOME/.claude/CLAUDE.md"
-    GEMINI_RULE_FILE="$HOME/.gemini/GEMINI.md"
-    TEMPLATE_FILE="$SCRIPT_DIR/SYSTEM_GOVERNOR_RULE_TEMPLATE.md"
-
-    if [ -n "${VSCODE_PID:-}" ] || [ -n "${CLAUDE_CODE_CONTEXT:-}" ]; then
-      DETECTED_AGENT="Claude Code"
-      TARGET_RULE_FILE="$CLAUDE_RULE_FILE"
-      AGENT_TYPE="claude-code"
-    elif [ -n "${ANTIGRAVITY_IDE:-}" ]; then
-      DETECTED_AGENT="Gemini (Antigravity)"
-      TARGET_RULE_FILE="$GEMINI_RULE_FILE"
-      AGENT_TYPE="gemini"
-    else
-      DETECTED_AGENT="未知環境"
-      TARGET_RULE_FILE=""
-      AGENT_TYPE=""
-    fi
-
-    echo ""
-    echo "🤖 Agent 規則集成指南"
-    echo "───────────────────────────────────────"
-    echo "   偵測到環境: $DETECTED_AGENT"
-    echo ""
-
-    if [ -n "$AGENT_TYPE" ] && [ -f "$TEMPLATE_FILE" ]; then
-      echo "   📋 設定步驟："
-      echo ""
-      echo "   1️⃣  打開規則模板："
-      echo "       nano $TEMPLATE_FILE"
-      echo ""
-      if [ "$AGENT_TYPE" = "claude-code" ]; then
-        echo "   2️⃣  複製「Rule 模板 — 複製到 CLAUDE.md」部分"
-      else
-        echo "   2️⃣  複製「Rule 模板 — 複製到 GEMINI.md」部分"
-      fi
-      echo ""
-      echo "   3️⃣  粘貼到你的規則檔："
-      echo "       nano $TARGET_RULE_FILE"
-      echo ""
-      echo "   4️⃣  驗證規則已加入："
-      echo "       grep -i 'System Governor' $TARGET_RULE_FILE"
-      echo ""
-      if [ "$AGENT_TYPE" = "claude-code" ]; then
-        echo "   ✅ 完成後，重新啟動 Claude Code"
-      else
-        echo "   ✅ 完成後，重新啟動 Antigravity IDE"
-      fi
-    else
-      echo "   📋 手動設定："
-      echo "   • Claude Code  → 複製規則到 ~/.claude/CLAUDE.md"
-      echo "   • Gemini       → 複製規則到 ~/.gemini/GEMINI.md"
-    fi
-
-    echo ""
-    save_step_status "agent_rules" "completed"
-  else
-    success "Agent 規則 (已完成，跳過)"
   fi
 
   # ── 完成 ────────────────────────────────────────────────────
@@ -339,21 +388,31 @@ PYEOF
   echo ""
 
   echo "💾 重要位置："
-  echo "   規則模板:      $SCRIPT_DIR/SYSTEM_GOVERNOR_RULE_TEMPLATE.md"
+  echo "   MCP 設定:      $CLAUDE_SETTINGS"
+  echo "   Agent 規則:    $CLAUDE_RULE_FILE"
   echo "   MCP README:    $MCP_SERVICE_DIR/README.md"
   echo "   安裝日誌:      $LOG_FILE"
   echo ""
 
-  echo "🚀 下一步:"
-  echo "   1. 訪問 Web Viewer: open $WEB_VIEWER_URL/archive"
-  echo "   2. 複製 Agent 規則到你的配置檔"
-  echo "   3. 重啟 Claude Code 或 Gemini"
+  echo "✅ 已自動配置："
+  echo "   • Docker 容器已運行"
+  echo "   • MCP 服務已就緒（15 個工具可用）"
+  echo "   • ~/.claude/settings.json 已配置"
+  echo "   • ~/.claude/CLAUDE.md 已注入 System Governor 規則"
   echo ""
 
-  echo "📚 文檔:"
+  echo "🚀 立即開始使用："
+  echo "   1️⃣  完全關閉 Claude Code（如果已開啟）"
+  echo "   2️⃣  重新打開 Claude Code"
+  echo "   3️⃣  在對話框中提問："
+  echo "       「評估一下我們應該採用微服務架構嗎？」"
+  echo "   4️⃣  Claude 會自動提議使用 System Governor"
+  echo ""
+
+  echo "📚 其他資源："
+  echo "   • Web Viewer:   $WEB_VIEWER_URL/archive"
   echo "   • 快速開始:     $SCRIPT_DIR/README.md"
   echo "   • 規則指南:     $SCRIPT_DIR/SYSTEM_GOVERNOR_RULE_TEMPLATE.md"
-  echo "   • 完整文檔:     $MCP_SERVICE_DIR/README.md"
   echo ""
 
   info "日誌已保存到: $LOG_FILE"
