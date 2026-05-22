@@ -325,19 +325,9 @@ PYEOF
       warn "找不到規則模板：$TEMPLATE_FILE，跳過注入"
       save_step_status "inject_rules" "completed"
     else
-      # 從模板中提取 Claude Code 規則（第 25-123 行）
-      RULES_TO_INJECT=$(sed -n '25,123p' "$TEMPLATE_FILE")
-
       if [ ! -f "$CLAUDE_RULE_FILE" ]; then
-        # 建立新的 CLAUDE.md
-        cat > "$CLAUDE_RULE_FILE" <<'EOF'
-# Claude Code — 全域配置規則
-
-> 自動由 System Governor 安裝程序生成
-
-EOF
-        echo "$RULES_TO_INJECT" >> "$CLAUDE_RULE_FILE"
-        success "建立並注入規則到 ~/.claude/CLAUDE.md"
+        warn "找不到 $CLAUDE_RULE_FILE，無法注入規則"
+        save_step_status "inject_rules" "completed"
       else
         # 檢查規則是否已存在
         if grep -q "System Governor MCP" "$CLAUDE_RULE_FILE" 2>/dev/null; then
@@ -346,9 +336,89 @@ EOF
           # 備份現有文件
           cp "$CLAUDE_RULE_FILE" "${CLAUDE_RULE_FILE}.backup.$(date +%Y%m%d%H%M%S)"
 
+          # 準備規則內容（格式：## 11. System Governor...）
+          RULES_FORMATTED=$(cat <<'RULES_EOF'
+
+## 11. System Governor MCP — 主動決策介入
+
+### 觸發條件（符合任一即可）
+
+#### Pattern 1: 多方案權衡
+用戶同時提及 ≥2 個技術方案，且：
+- 包含對比詞：「vs」「還是」「或」「對比」「權衡」
+- 涉及「選哪個」「應該用」「如何評估」
+
+**範例**：
+- "我們是用 Kong 還是 Envoy？"
+- "考慮 PostgreSQL 或 MongoDB，哪個更合適？"
+- "Kubernetes 跟 Docker Swarm 怎麼選？"
+
+#### Pattern 2: 系統性改動
+用戶討論影響長期架構的變更：
+- 「遷移」「重構」「升級」「替換」核心組件
+- 「引入」新的 framework / 基礎設施
+- 涉及多個團隊協作（API 變更、數據結構調整）
+
+**範例**：
+- "我們考慮從 monolith 遷移到微服務"
+- "需要重構認證層，支持 OAuth"
+- "引入新的日誌系統"
+
+#### Pattern 3: 假設驗證
+用戶提出「我以為...」「為什麼...」「是否...」的疑問：
+- 需要驗證設計假設
+- 尋求技術方案的合理性論證
+- 評估隱藏風險
+
+**範例**：
+- "我們假設 Redis 的效能足以支撐...對嗎？"
+- "使用 ORM 會不會影響查詢性能？"
+- "這個架構在高併發下會不會出問題？"
+
+### 主動提議邏輯
+
+1. **檢測場景**：Agent 在對話中識別上述任一 Pattern，**主動提議**（不等用戶要求）
+
+2. **檢查服務**：
+```bash
+bash ~/Project/pipagent/agent_self_check.sh health
+```
+- 返回 `OK` → 執行提議
+- 返回 `FAIL` → 告知用戶啟動（給出 install 命令）
+
+3. **提議模板**：
+```
+我注意到你在評估 [決策類型]。這涉及多個方案的權衡/長期架構影響。
+
+我可以用 System Governor 來幫你：
+• 正式記錄每個方案的假設與約束
+• 分析代碼影響範圍（哪些模塊會受影響）
+• 生成決策報告（方便團隊追蹤）
+
+要用嗎？
+```
+
+4. **執行工作流**：若用戶同意，依序執行：
+   1. `sg_create_session("{決策主題}")`
+   2. `sg_record_input()` × N 記錄用戶輸入
+   3. `sg_run_stage_01()` 假設對齐
+   4. `sg_run_stage_02()` 代碼影響 + Hard Code 檢測
+   5. `sg_run_stage_03()` 架構辯證
+   6. `sg_generate_full()` 生成報告
+
+### 關鍵原則
+
+✓ **主動介入** — 不等用戶說「幫我記錄」，自己看出決策場景就提
+✓ **詢問優先** — 提議後一定要等用戶確認，不強制執行
+✓ **模式優於關鍵詞** — 基於上下文判斷，不只看特定詞彙
+✓ **優雅降級** — 服務不可用時提供啟動指引，切換到標準流程
+✓ **無需 Skill** — 本規則自包含，無需用戶知道 `/system-governor-mcp-guide`
+
+RULES_EOF
+)
+
           # 在文件末尾添加規則
-          echo "" >> "$CLAUDE_RULE_FILE"
-          echo "$RULES_TO_INJECT" >> "$CLAUDE_RULE_FILE"
+          echo "$RULES_FORMATTED" >> "$CLAUDE_RULE_FILE"
           success "注入規則到 ~/.claude/CLAUDE.md"
         fi
       fi
