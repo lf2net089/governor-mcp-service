@@ -21,7 +21,7 @@ services:
       - REMINDER_THRESHOLD_MINUTES=${REMINDER_THRESHOLD_MINUTES:-10}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://${MCP_HOST}:${MCP_PORT}/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9091/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
