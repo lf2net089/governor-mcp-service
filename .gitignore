@@ -1,32 +1,74 @@
-# Byte-compiled / optimized / DLL files
+# ============================================================
+# System Governor — .gitignore
+# ============================================================
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
 
 # Virtual environments
 .venv/
 venv/
 env/
+ENV/
 
-# Data directory (SQLite DB + generated reports)
-# 保留目錄結構但排除內容
-mcp-service/data/governor.db
-mcp-service/data/reports/memo/*.html
-mcp-service/data/reports/traces/*.html
-mcp-service/data/reports/full/*.html
+# Data & Runtime
+# 保留目錄結構但排除所有資料與生成的報告
+governor/data/
+dist/data/
+
+# Installation & Build artifacts
+.install_status
+install.log
+*.egg-info/
+dist-build/
+build/
 
 # Docker
 .docker/
+docker-compose.override.yml
 
-# OS
+# Configuration
+.env
+.env.local
+.env.*.local
+
+# OS files
 .DS_Store
 Thumbs.db
+.AppleDouble
+.LSOverride
 
-# Editor
+# IDE & Editor
 .vscode/
+.idea/
 *.swp
 *.swo
+*~
+.project
+.classpath
+.sublime-project
+.sublime-workspace
 
-# Backup files
+# Backup & Temp files
 *.backup.*
+*.backup
+*.tmp
+*.temp
+*_backup
+
+# Logs
+*.log
+logs/
+
+# System files
+._*
+.fuse_hidden*
+ehthumbs.db
