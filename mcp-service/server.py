@@ -206,6 +206,461 @@ async def handle_health(request):
     from starlette.responses import JSONResponse
     return JSONResponse({"status": "ok", "service": "system-governor-mcp", "tools": 15})
 
+# ─── Archive Viewer ──────────────────────────────────────────────────────────
+
+@mcp.custom_route("/archive", methods=["GET"])
+async def handle_archive(request):
+    import aiosqlite
+    import json
+    from starlette.responses import HTMLResponse
+
+    db_path = os.environ.get("DB_PATH", "/data/governor.db")
+
+    # 查詢所有 sessions 及其相關數據
+    sessions_data = []
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+
+        # 取得所有 sessions
+        async with db.execute("SELECT * FROM sessions ORDER BY created_at DESC") as cur:
+            sessions = await cur.fetchall()
+
+            for session in sessions:
+                sid = session["id"]
+                session_dict = dict(session)
+
+                # 取得該 session 的 records
+                async with db.execute(
+                    "SELECT stage, role, content, created_at FROM records WHERE session_id=? ORDER BY created_at",
+                    (sid,)
+                ) as rec_cur:
+                    records = await rec_cur.fetchall()
+                    session_dict["records"] = [dict(r) for r in records]
+
+                # 取得該 session 的 stage_progress
+                async with db.execute(
+                    "SELECT stage, status, completed_at FROM stage_progress WHERE session_id=? ORDER BY stage",
+                    (sid,)
+                ) as stage_cur:
+                    stages = await stage_cur.fetchall()
+                    session_dict["stages"] = [dict(s) for s in stages]
+
+                # 取得該 session 的 reports
+                async with db.execute(
+                    "SELECT report_type, file_path, generated_at FROM reports WHERE session_id=? ORDER BY generated_at DESC",
+                    (sid,)
+                ) as rep_cur:
+                    reports = await rep_cur.fetchall()
+                    session_dict["reports"] = [dict(r) for r in reports]
+
+                sessions_data.append(session_dict)
+
+    # 生成 HTML
+    html_content = _generate_archive_html(sessions_data)
+    return HTMLResponse(content=html_content)
+
+
+def _generate_archive_html(sessions_data):
+    """生成歸檔查看器 HTML"""
+
+    html_parts = [
+        """<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Governor — 決策檔案庫</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            background: white;
+            padding: 30px 0;
+            margin-bottom: 40px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #222;
+        }
+
+        header p {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .session-card {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border-left: 4px solid #0066cc;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #f0f0f0;
+            padding-bottom: 12px;
+        }
+
+        .session-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #222;
+            flex: 1;
+        }
+
+        .session-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            color: #999;
+            text-align: right;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-active { background: #e8f5e9; color: #2e7d32; }
+        .badge-closed { background: #f5f5f5; color: #666; }
+        .badge-passed { background: #e3f2fd; color: #1565c0; }
+        .badge-stage { background: #fff3e0; color: #e65100; padding: 2px 8px; }
+
+        .section {
+            margin-top: 20px;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .timeline {
+            margin-left: 0;
+            border-left: 2px solid #f0f0f0;
+            padding-left: 16px;
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -21px;
+            top: 2px;
+            width: 10px;
+            height: 10px;
+            background: #0066cc;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 0 1px #f0f0f0;
+        }
+
+        .timeline-time {
+            font-size: 11px;
+            color: #999;
+            margin-bottom: 4px;
+        }
+
+        .timeline-content {
+            background: #fafafa;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #555;
+            border-left: 2px solid #e0e0e0;
+            word-break: break-word;
+        }
+
+        .timeline-stage {
+            display: inline-block;
+            margin-right: 8px;
+            font-size: 11px;
+        }
+
+        .stage-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f5f5f5;
+            font-size: 13px;
+        }
+
+        .stage-name {
+            font-weight: 500;
+            color: #222;
+            flex: 1;
+        }
+
+        .reports-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+        }
+
+        .report-link {
+            display: block;
+            padding: 12px;
+            background: #f0f7ff;
+            border: 1px solid #d0e8ff;
+            border-radius: 6px;
+            text-decoration: none;
+            color: #0066cc;
+            font-size: 12px;
+            font-weight: 500;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .report-link:hover {
+            background: #0066cc;
+            color: white;
+            border-color: #0066cc;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+            font-size: 14px;
+        }
+
+        .stakeholders {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .stakeholder-tag {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #666;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px 0;
+            font-size: 12px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📋 System Governor — 決策檔案庫</h1>
+            <p>所有的架構決策與評估過程，一目瞭然</p>
+        </header>
+"""
+    ]
+
+    if not sessions_data:
+        html_parts.append("""
+        <div class="empty-state">
+            <p>目前沒有任何決策記錄</p>
+            <p style="margin-top: 12px; font-size: 12px; color: #ccc;">
+                使用 Claude Code 或 Gemini Agent 開始你的第一個決策評估
+            </p>
+        </div>
+""")
+    else:
+        for session in sessions_data:
+            sid = session.get("id", "")
+            topic = session.get("topic", "未命名")
+            status = session.get("status", "active")
+            created_at = session.get("created_at", "")[:19]
+            stakeholders = json.loads(session.get("stakeholders", "[]")) if isinstance(session.get("stakeholders"), str) else session.get("stakeholders", [])
+
+            status_badge = "badge-active" if status == "active" else "badge-closed"
+
+            html_parts.append(f"""
+        <div class="session-card">
+            <div class="session-header">
+                <div>
+                    <div class="session-title">{topic}</div>
+                    <div class="stakeholders">
+""")
+
+            if stakeholders:
+                for sh in stakeholders:
+                    html_parts.append(f'<span class="stakeholder-tag">{sh}</span>')
+
+            html_parts.append(f"""
+                    </div>
+                </div>
+                <div class="session-meta">
+                    <div>
+                        <span class="badge {status_badge}">{status}</span>
+                    </div>
+                    <div>{created_at}</div>
+                    <div style="font-size: 10px; color: #ccc; letter-spacing: 1px;">{sid}</div>
+                </div>
+            </div>
+""")
+
+            # 顯示 records
+            records = session.get("records", [])
+            if records:
+                html_parts.append("""
+            <div class="section">
+                <div class="section-title">💬 決策過程</div>
+                <div class="timeline">
+""")
+                for rec in records:
+                    stage = rec.get("stage", "")
+                    role = rec.get("role", "")
+                    content = rec.get("content", "")[:150]
+                    rec_time = rec.get("created_at", "")[:19]
+
+                    stage_color = {
+                        "interview": "#0066cc",
+                        "hypothesis": "#ff6b00",
+                        "gitnexus_audit": "#6b21a8",
+                        "tradeoff": "#d97706",
+                        "conclusion": "#059669",
+                        "memo": "#7c3aed"
+                    }.get(stage, "#999")
+
+                    html_parts.append(f"""
+                    <div class="timeline-item">
+                        <div class="timeline-time">{rec_time}</div>
+                        <div style="margin-bottom: 4px;">
+                            <span class="badge-stage" style="background: {stage_color}40; color: {stage_color};">{stage}</span>
+                            <span style="font-size: 11px; color: #999;">({role})</span>
+                        </div>
+                        <div class="timeline-content">{content}...</div>
+                    </div>
+""")
+
+                html_parts.append("""
+                </div>
+            </div>
+""")
+
+            # 顯示 stages 進度
+            stages = session.get("stages", [])
+            if stages:
+                html_parts.append("""
+            <div class="section">
+                <div class="section-title">🎯 工作流進度</div>
+""")
+                stage_names = {
+                    "01": "假設對齊驗證",
+                    "02": "代碼影響分析",
+                    "03": "架構辯證權衡"
+                }
+                for stage in stages:
+                    st = stage.get("stage", "")
+                    st_status = stage.get("status", "pending")
+                    st_completed = stage.get("completed_at", "")[:10] if stage.get("completed_at") else "-"
+                    st_name = stage_names.get(st, st)
+
+                    status_color = {
+                        "pending": "#999",
+                        "in_progress": "#ff6b00",
+                        "passed": "#059669",
+                        "blocked": "#dc2626"
+                    }.get(st_status, "#999")
+
+                    html_parts.append(f"""
+                <div class="stage-row">
+                    <div class="stage-name">Stage {st}: {st_name}</div>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <span style="font-size: 11px; color: {status_color}; font-weight: 500;">{st_status.upper()}</span>
+                        <span style="font-size: 11px; color: #999;">{st_completed}</span>
+                    </div>
+                </div>
+""")
+
+                html_parts.append("""
+            </div>
+""")
+
+            # 顯示 reports
+            reports = session.get("reports", [])
+            if reports:
+                html_parts.append("""
+            <div class="section">
+                <div class="section-title">📄 生成的報告</div>
+                <div class="reports-grid">
+""")
+                report_labels = {
+                    "memo": "Quick Memo",
+                    "trace": "Solution Trace",
+                    "full": "完整報告"
+                }
+                for rep in reports:
+                    rep_type = rep.get("report_type", "")
+                    rep_path = rep.get("file_path", "")
+                    rep_label = report_labels.get(rep_type, rep_type)
+
+                    html_parts.append(f"""
+                    <a href="file://{rep_path}" class="report-link">
+                        {rep_label}
+                    </a>
+""")
+
+                html_parts.append("""
+                </div>
+            </div>
+""")
+
+            html_parts.append("</div>")
+
+    html_parts.append("""
+        <footer>
+            <p>System Governor — 架構決策記錄與驗證系統</p>
+            <p style="margin-top: 8px; font-size: 11px;">所有決策過程均原文存檔，防竄改驗證確保完整性</p>
+        </footer>
+    </div>
+</body>
+</html>
+""")
+
+    return "\n".join(html_parts)
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 async def main():

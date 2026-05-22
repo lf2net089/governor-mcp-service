@@ -5,7 +5,7 @@
 ### ✅ 已完成 (Done)
 
 #### 1. 本地環境部署與測試
-- ✅ Docker 服務成功啟動，HTTP/SSE 在 `http://localhost:8080`
+- ✅ Docker 服務成功啟動，HTTP/SSE 在 `http://localhost:9090`
 - ✅ 健康檢查端點 `/health` 可用，返回正常狀態
 - ✅ MCP 配置已寫入 `~/.gemini/antigravity/mcp_config.json`
 - ✅ SQLite 資料庫初始化（`governor.db`）
@@ -127,7 +127,7 @@ docker-compose up -d
 docker compose logs system-governor-mcp -f
 
 # 確認端口未被佔用
-lsof -i :8080
+lsof -i :9090
 
 # 重建鏡像
 docker compose down -v
@@ -139,7 +139,7 @@ docker compose up -d
 
 ```bash
 # 確認服務已完全啟動
-curl -v http://localhost:8080/health
+curl -v http://localhost:9090/health
 
 # 檢查網絡連接
 docker exec system-governor-mcp ping host.docker.internal
@@ -153,7 +153,7 @@ docker exec system-governor-mcp ping host.docker.internal
 cat ~/.gemini/antigravity/mcp_config.json | python3 -m json.tool
 
 # 確認 MCP 端點可達
-curl -s http://localhost:8080/ | head -20
+curl -s http://localhost:9090/ | head -20
 ```
 
 ---

@@ -11,7 +11,10 @@
 bash install.sh
 
 # 確認服務
-curl http://localhost:8080/health
+curl http://localhost:9090/health
+
+# 訪問決策檔案庫
+open http://localhost:9090/archive
 
 # 卸載
 bash uninstall.sh
@@ -34,10 +37,12 @@ pipagent/
 │   └── 03_architectural_tradeoff.html
 │
 └── mcp-service/            ← Docker MCP 服務（核心）
-    ├── server.py           ← FastMCP 主入口 (HTTP/SSE :8080)
+    ├── server.py           ← FastMCP 主入口 (HTTP/SSE :9090)
+    │                          含 /mcp + /health + /archive（新增）
     ├── Dockerfile
     ├── docker-compose.yml
     ├── requirements.txt
+    ├── README.md           ← 服務詳細文檔
     │
     ├── core/               ← 核心層
     │   ├── db.py           ← SQLite（immutable records）
@@ -197,28 +202,59 @@ sg_create_session
 
 ---
 
+---
+
+## 📊 新功能：決策檔案庫
+
+在瀏覽器訪問 `http://localhost:9090/archive` 可查看所有歷史決策記錄：
+
+- 💬 **決策過程** — 完整時間線（訪談 → 假設 → 分析 → 權衡 → 結論）
+- 👥 **利益相關者** — 誰參與了這個決策
+- 🎯 **工作流進度** — Stage 01/02/03 進度一覽
+- 📄 **生成報告** — 直接打開 Memo / Trace / Full 報告
+
+設計特性：
+- ✅ 白色簡潔設計，易於閱讀
+- ✅ 非專業人士也能理解決策過程
+- ✅ 完整軌跡可視化，方便分享
+
+---
+
 ## Antigravity IDE 接入
 
 在 `~/.gemini/antigravity/mcp_config.json` 的 `mcpServers` 加入：
 
 ```json
 "system-governor": {
-  "url": "http://localhost:8080/mcp",
+  "url": "http://localhost:9090/mcp",
   "disabled": false
 }
 ```
 
 重啟 IDE 後，`sg_*` 工具即可使用。
 
+> 💡 `install.sh` 會自動完成此步驟（若 mcp_config.json 存在）
+
+---
+
+## 📋 服務端點
+
+| 用途 | 端點 |
+|------|------|
+| MCP 工具調用 | `http://localhost:9090/mcp` |
+| 健康檢查 | `http://localhost:9090/health` |
+| 決策檔案庫 | `http://localhost:9090/archive` ⭐ 新增 |
+
 ---
 
 ## 報告查詢
 
 ```bash
-# 開啟最新 Memo 報告
-open mcp-service/data/reports/memo/*.html
+# 訪問決策檔案庫（推薦）
+open http://localhost:9090/archive
 
-# 開啟最新 Full Report
+# 或手動查詢報告文件
+open mcp-service/data/reports/memo/*.html
 open mcp-service/data/reports/full/*.html
 
 # 直接查詢 SQLite DB

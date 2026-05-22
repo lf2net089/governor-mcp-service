@@ -15,7 +15,10 @@
       "Bash(chmod +x /tmp/test_mcp.sh)",
       "Bash(bash /tmp/test_mcp.sh)",
       "Bash(docker cp *)",
-      "Bash(npx gitnexus *)"
+      "Bash(npx gitnexus *)",
+      "Bash(docker-compose down *)",
+      "Bash(bash install.sh)",
+      "Bash(bash ../install.sh)"
     ]
   }
 }
