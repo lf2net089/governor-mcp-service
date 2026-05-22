@@ -3,7 +3,7 @@ FROM python:3.12-alpine
 WORKDIR /app
 
 # Install only necessary system dependencies
-RUN apk add --no-cache gcc musl-dev sqlite
+RUN apk add --no-cache bash gcc musl-dev sqlite
 
 # Install Python dependencies
 COPY governor/requirements.txt .
