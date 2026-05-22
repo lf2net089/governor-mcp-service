@@ -336,90 +336,53 @@ PYEOF
           # 備份現有文件
           cp "$CLAUDE_RULE_FILE" "${CLAUDE_RULE_FILE}.backup.$(date +%Y%m%d%H%M%S)"
 
-          # 準備規則內容（格式：## 11. System Governor...）
-          RULES_FORMATTED=$(cat <<'RULES_EOF'
+          # 使用 Python 直接附加規則（避免 bash heredoc 問題）
+          python3 << PYEOF >> "$LOG_FILE" 2>&1
+import os
+from pathlib import Path
 
-## 11. System Governor MCP — 主動決策介入
+claude_file = Path(os.path.expanduser("~/.claude/CLAUDE.md"))
+template_file = Path("$TEMPLATE_FILE")
 
-### 觸發條件（符合任一即可）
+if not claude_file.exists():
+    print("❌ CLAUDE.md 不存在")
+    exit(1)
 
-#### Pattern 1: 多方案權衡
-用戶同時提及 ≥2 個技術方案，且：
-- 包含對比詞：「vs」「還是」「或」「對比」「權衡」
-- 涉及「選哪個」「應該用」「如何評估」
+if not template_file.exists():
+    print("❌ 模板不存在")
+    exit(1)
 
-**範例**：
-- "我們是用 Kong 還是 Envoy？"
-- "考慮 PostgreSQL 或 MongoDB，哪個更合適？"
-- "Kubernetes 跟 Docker Swarm 怎麼選？"
+with open(template_file, 'r', encoding='utf-8') as f:
+    lines = f.readlines()
 
-#### Pattern 2: 系統性改動
-用戶討論影響長期架構的變更：
-- 「遷移」「重構」「升級」「替換」核心組件
-- 「引入」新的 framework / 基礎設施
-- 涉及多個團隊協作（API 變更、數據結構調整）
+rule_start = rule_end = None
+for i, line in enumerate(lines):
+    if '# System Governor MCP — Claude Code 主動決策介入' in line:
+        rule_start = i
+    if rule_start is not None and i > rule_start and '## 📋 Rule 模板 — 複製到 GEMINI.md' in line:
+        rule_end = i
+        break
 
-**範例**：
-- "我們考慮從 monolith 遷移到微服務"
-- "需要重構認證層，支持 OAuth"
-- "引入新的日誌系統"
+if rule_start is None or rule_end is None:
+    print("❌ 無法找到規則範圍")
+    exit(1)
 
-#### Pattern 3: 假設驗證
-用戶提出「我以為...」「為什麼...」「是否...」的疑問：
-- 需要驗證設計假設
-- 尋求技術方案的合理性論證
-- 評估隱藏風險
+rules = ''.join(lines[rule_start:rule_end]).strip()
+rules = rules.replace('# System Governor MCP — Claude Code 主動決策介入', '## 11. System Governor MCP — 主動決策介入')
+for i in range(4):
+    rules = rules.replace('\n' + '#' * (4-i) + ' ', '\n' + '#' * (3-i) + ' ')
 
-**範例**：
-- "我們假設 Redis 的效能足以支撐...對嗎？"
-- "使用 ORM 會不會影響查詢性能？"
-- "這個架構在高併發下會不會出問題？"
+with open(claude_file, 'a', encoding='utf-8') as f:
+    f.write('\n' + rules + '\n')
 
-### 主動提議邏輯
+print("✅ 規則已注入")
+PYEOF
 
-1. **檢測場景**：Agent 在對話中識別上述任一 Pattern，**主動提議**（不等用戶要求）
-
-2. **檢查服務**：
-```bash
-bash ~/Project/pipagent/agent_self_check.sh health
-```
-- 返回 `OK` → 執行提議
-- 返回 `FAIL` → 告知用戶啟動（給出 install 命令）
-
-3. **提議模板**：
-```
-我注意到你在評估 [決策類型]。這涉及多個方案的權衡/長期架構影響。
-
-我可以用 System Governor 來幫你：
-• 正式記錄每個方案的假設與約束
-• 分析代碼影響範圍（哪些模塊會受影響）
-• 生成決策報告（方便團隊追蹤）
-
-要用嗎？
-```
-
-4. **執行工作流**：若用戶同意，依序執行：
-   1. `sg_create_session("{決策主題}")`
-   2. `sg_record_input()` × N 記錄用戶輸入
-   3. `sg_run_stage_01()` 假設對齐
-   4. `sg_run_stage_02()` 代碼影響 + Hard Code 檢測
-   5. `sg_run_stage_03()` 架構辯證
-   6. `sg_generate_full()` 生成報告
-
-### 關鍵原則
-
-✓ **主動介入** — 不等用戶說「幫我記錄」，自己看出決策場景就提
-✓ **詢問優先** — 提議後一定要等用戶確認，不強制執行
-✓ **模式優於關鍵詞** — 基於上下文判斷，不只看特定詞彙
-✓ **優雅降級** — 服務不可用時提供啟動指引，切換到標準流程
-✓ **無需 Skill** — 本規則自包含，無需用戶知道 `/system-governor-mcp-guide`
-
-RULES_EOF
-)
-
-          # 在文件末尾添加規則
-          echo "$RULES_FORMATTED" >> "$CLAUDE_RULE_FILE"
-          success "注入規則到 ~/.claude/CLAUDE.md"
+          if [ $? -eq 0 ]; then
+            success "注入規則到 ~/.claude/CLAUDE.md"
+          else
+            warn "規則注入失敗"
+          fi
         fi
       fi
     fi
