@@ -1,12 +1,17 @@
 """
 server.py — System Governor MCP Service 主入口
-傳輸: HTTP/SSE (StreamableHTTP)，Port 8080
+傳輸: HTTP/SSE (StreamableHTTP)，Port 9090
 """
 
 import os
 import asyncio
-from contextlib import asynccontextmanager
+import json
+import aiosqlite
 from fastmcp import FastMCP
+from starlette.applications import Starlette
+from starlette.responses import HTMLResponse, JSONResponse
+from starlette.routing import Route
+from starlette.middleware.cors import CORSMiddleware
 
 from core.db import init_db
 
@@ -27,7 +32,7 @@ from tools.report_tools import (
 )
 
 HOST = os.environ.get("MCP_HOST", "0.0.0.0")
-PORT = int(os.environ.get("MCP_PORT", "8080"))
+PORT = int(os.environ.get("MCP_PORT", "9090"))
 
 # ─── FastMCP 實例 ────────────────────────────────────────────────────────────
 
@@ -199,21 +204,15 @@ async def sg_generate_trace(session_id: str) -> dict:
 async def sg_generate_full(session_id: str) -> dict:
     return await tool_generate_full(session_id)
 
-# ─── Health endpoint ─────────────────────────────────────────────────────────
+# ─── HTTP 端點處理 ──────────────────────────────────────────────────────────
 
-@mcp.custom_route("/health", methods=["GET"])
 async def handle_health(request):
-    from starlette.responses import JSONResponse
+    """健康檢查端點"""
     return JSONResponse({"status": "ok", "service": "system-governor-mcp", "tools": 15})
 
-# ─── Archive Viewer ──────────────────────────────────────────────────────────
 
-@mcp.custom_route("/archive", methods=["GET"])
 async def handle_archive(request):
-    import aiosqlite
-    import json
-    from starlette.responses import HTMLResponse
-
+    """決策檔案庫網頁查看器"""
     db_path = os.environ.get("DB_PATH", "/data/governor.db")
 
     # 查詢所有 sessions 及其相關數據
@@ -669,6 +668,7 @@ async def main():
     print(f"✅ System Governor MCP Service 啟動中...")
     print(f"📡 HTTP/SSE: http://{HOST}:{PORT}")
     print(f"🏥 Health:   http://{HOST}:{PORT}/health")
+    print(f"📊 Archive:  http://{HOST}:{PORT}/archive")
     print(f"🗄️  DB:      {os.environ.get('DB_PATH', '/data/governor.db')}")
     print(f"📁 Reports:  {os.environ.get('REPORTS_DIR', '/data/reports')}")
 

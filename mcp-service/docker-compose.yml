@@ -4,6 +4,7 @@ services:
     container_name: system-governor-mcp
     ports:
       - "${MCP_PORT:-9090}:${MCP_PORT:-9090}"
+      - "9091:9091"  # Web Viewer port
     volumes:
       # Persistent data: SQLite DB + generated reports
       - ./data:${DATA_DIR:-/data}

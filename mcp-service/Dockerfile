@@ -4,19 +4,22 @@ WORKDIR /app
 
 # Install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt aiohttp
 
 # Copy source
 COPY . .
 
+# Make entrypoint executable
+RUN chmod +x entrypoint.sh
+
 # Create data directories
 RUN mkdir -p /data/reports/memo /data/reports/traces /data/reports/full
 
-# Expose MCP HTTP/SSE port
-EXPOSE 8080
+# Expose ports: 9090 for MCP, 9091 for Web Viewer
+EXPOSE 9090 9091
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:9090/health')" || exit 1
 
-CMD ["python", "server.py"]
+ENTRYPOINT ["bash", "entrypoint.sh"]
