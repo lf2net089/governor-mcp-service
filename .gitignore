@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Data directory (SQLite DB + generated reports)
+# 保留目錄結構但排除內容
+mcp-service/data/governor.db
+mcp-service/data/reports/memo/*.html
+mcp-service/data/reports/traces/*.html
+mcp-service/data/reports/full/*.html
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
+*.swo
+
+# Backup files
+*.backup.*
