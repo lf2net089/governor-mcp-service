@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quick Memo · System Governor 快速驗證</title>
+<style>
+  :root {
+    --bg: #f8fafc; --surface: #fff; --border: #e2e8f0;
+    --amber: #d97706; --amber-bg: #fffbeb; --amber-border: #fde68a;
+    --emerald: #059669; --emerald-bg: #ecfdf5; --emerald-border: #a7f3d0;
+    --rose: #e11d48; --rose-bg: #fff1f2; --rose-border: #fecdd3;
+    --blue: #2563eb; --blue-bg: #eff6ff; --blue-border: #bfdbfe;
+    --muted: #64748b; --text: #1e293b; --mono: 'Courier New', monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.7; }
+  @media print {
+    body { font-size: 12px; }
+    .no-print { display: none; }
+    .page-break { page-break-before: always; }
+  }
+
+  .page { max-width: 960px; margin: 0 auto; padding: 48px 40px; }
+
+  /* Cover */
+  .cover { border-bottom: 3px solid var(--amber); padding-bottom: 32px; margin-bottom: 40px; }
+  .cover-type { font-size: 11px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--amber); margin-bottom: 8px; }
+  .cover-title { font-size: 28px; font-weight: 800; color: var(--text); margin-bottom: 12px; letter-spacing: -0.02em; }
+  .cover-meta { display: flex; gap: 24px; flex-wrap: wrap; }
+  .meta-item { font-size: 12px; color: var(--muted); }
+  .meta-item strong { color: var(--text); }
+  .session-id { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 8px; }
+
+  /* Warning banner for unfilled */
+  .unfilled-banner {
+    background: var(--rose-bg); border: 1px solid var(--rose-border);
+    border-radius: 8px; padding: 14px 18px; margin-bottom: 32px;
+  }
+  .unfilled-banner h4 { color: var(--rose); font-size: 13px; margin-bottom: 6px; }
+  .unfilled-banner ul { color: var(--rose); font-size: 12px; padding-left: 16px; }
+
+  /* Section */
+  .section { margin-bottom: 40px; }
+  .section-title {
+    font-size: 13px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 16px;
+  }
+
+  /* Record cards */
+  .record-list { display: flex; flex-direction: column; gap: 10px; }
+  .record-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px;
+    border-left: 3px solid var(--border);
+  }
+  .record-card.role-user { border-left-color: var(--blue); }
+  .record-card.role-pm { border-left-color: var(--amber); }
+  .record-card.role-engineer { border-left-color: var(--emerald); }
+  .record-card.role-stakeholder { border-left-color: #7c3aed; }
+
+  .record-meta { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .record-role {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 4px;
+  }
+  .role-user .record-role { background: var(--blue-bg); color: var(--blue); }
+  .role-pm .record-role { background: var(--amber-bg); color: var(--amber); }
+  .role-engineer .record-role { background: var(--emerald-bg); color: var(--emerald); }
+  .role-stakeholder .record-role { background: #f3e8ff; color: #7c3aed; }
+
+  .record-time { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .record-hash { font-size: 10px; color: #94a3b8; font-family: var(--mono); }
+  .record-content { font-size: 13px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+  .record-note { font-size: 11px; color: var(--muted); margin-top: 6px; font-style: italic; }
+
+  /* Pending placeholder */
+  .pending { color: var(--rose); font-style: italic; }
+
+  /* Conclusion box */
+  .conclusion-box {
+    background: var(--emerald-bg); border: 1px solid var(--emerald-border);
+    border-radius: 8px; padding: 18px 20px;
+  }
+  .conclusion-box p { color: #065f46; }
+
+  /* Hash chain table */
+  .hash-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--mono); }
+  .hash-table th { background: #f1f5f9; padding: 6px 10px; text-align: left; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
+  .hash-table td { padding: 5px 10px; border-bottom: 1px solid #f1f5f9; color: var(--muted); }
+  .hash-table tr:hover td { background: #f8fafc; }
+
+  /* Footer */
+  .footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border); text-align: center; font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Cover -->
+  <div class="cover">
+    <div class="cover-type">📝 Quick Memo · System Governor</div>
+    <div class="cover-title">System Governor 快速驗證</div>
+    <div class="cover-meta">
+      <div class="meta-item"><strong>生成時間：</strong>2026-05-22 07:28 UTC</div>
+      <div class="meta-item"><strong>狀態：</strong>active</div>
+      
+      <div class="meta-item"><strong>利害關係人：</strong>user, ai</div>
+      
+      <div class="meta-item"><strong>記錄數：</strong>1 筆</div>
+    </div>
+    <div class="session-id">Session ID: sg-c146c788e73d</div>
+  </div>
+
+  <!-- Unfilled warning -->
+  
+  <div class="unfilled-banner">
+    <h4>⚠️ 以下階段尚無 sg_record_input 記錄（報告中標示【⏳ 待確認】）</h4>
+    <ul>
+      <li>conclusion（需求結論）</li>
+    </ul>
+  </div>
+  
+
+  <!-- Section 1: Interview -->
+  <div class="section">
+    <div class="section-title">§1 訪談原始記錄</div>
+    
+    
+      <div class="record-list">
+        
+        <div class="record-card role-user">
+          <div class="record-meta">
+            <span class="record-role">user</span>
+            <span class="record-time">2026-05-22 07:28:22 UTC</span>
+            <span class="record-hash">#6cd1d3d3</span>
+          </div>
+          <div class="record-content">我們需要評估是否應該重構認證系統</div>
+          
+        </div>
+        
+      </div>
+    
+  </div>
+
+  <!-- Section 2: Memo -->
+  
+  
+
+  <!-- Section 3: Conclusion -->
+  <div class="section">
+    <div class="section-title">§3 需求結論</div>
+    
+    
+      <p class="pending">【⏳ 需求結論 待確認 — 尚未呼叫 sg_record_input(stage='conclusion')】</p>
+    
+  </div>
+
+  <!-- Section 4: Pending list -->
+  
+  
+    
+  
+    
+  
+    
+  
+  
+  <div class="section">
+    <div class="section-title">§4 未確認項目清單</div>
+    <ul style="padding-left:20px;color:var(--rose)">
+      
+      <li style="margin-bottom:4px">Memo</li>
+      
+      <li style="margin-bottom:4px">需求結論</li>
+      
+    </ul>
+  </div>
+  
+
+  <!-- Section 5: Hash chain -->
+  
+  <div class="section">
+    <div class="section-title">§5 防竄改憑據 · SHA-256 Hash 鏈</div>
+    <table class="hash-table">
+      <tr><th>記錄 ID</th><th>Hash (前8碼)</th><th>角色</th><th>階段</th><th>時間</th></tr>
+      
+      <tr>
+        <td>rec-bd98e321595d</td>
+        <td>6cd1d3d3</td>
+        <td>user</td>
+        <td>interview</td>
+        <td>2026-05-22 07:28:22</td>
+      </tr>
+      
+    </table>
+  </div>
+  
+
+  <div class="footer">
+    System Governor MCP · Quick Memo Report · 2026-05-22 07:28 UTC · Session: sg-c146c788e73d
+    <br>⚠️ 本報告內容完全來自 sg_record_input 記錄，系統未做任何推導補全。
+  </div>
+
+</div>
+</body>
+</html>

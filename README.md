@@ -57,7 +57,7 @@ pipagent/
 ├── .github/workflows/      ← GitHub Actions 自動化
 │   └── release.yml         ← 自動構建 & 發佈 Docker 鏡像
 │
-└── mcp-service/            ← Docker MCP 服務（核心）
+└── governor/               ← System Governor MCP 服務（核心）
     ├── server.py           ← FastMCP 主入口 (HTTP/SSE :9090)
     │                          含 /mcp + /health + /archive（新增）
     ├── Dockerfile
@@ -275,11 +275,11 @@ sg_create_session
 open http://localhost:9090/archive
 
 # 或手動查詢報告文件
-open mcp-service/data/reports/memo/*.html
-open mcp-service/data/reports/full/*.html
+open governor/data/reports/memo/*.html
+open governor/data/reports/full/*.html
 
 # 直接查詢 SQLite DB
-sqlite3 mcp-service/data/governor.db "SELECT id, role, stage, created_at, substr(content,1,80) FROM records ORDER BY created_at DESC LIMIT 20;"
+sqlite3 governor/data/governor.db "SELECT id, role, stage, created_at, substr(content,1,80) FROM records ORDER BY created_at DESC LIMIT 20;"
 ```
 
 ---
@@ -293,7 +293,7 @@ sqlite3 mcp-service/data/governor.db "SELECT id, role, stage, created_at, substr
 > 不支援。Records 為 immutable，這是防竄改設計。請新增一筆修正記錄，在 `source_note` 說明「修正前一筆記錄 #xxx」。
 
 **Q: Docker 服務停止後資料是否保留？**
-> 是。資料儲存於 `mcp-service/data/governor.db`，重啟後自動載入。
+> 是。資料儲存於 `governor/data/governor.db`，重啟後自動載入。
 
 **Q: Reminder 很煩，可以關閉嗎？**
 > 可調整 `docker-compose.yml` 中的 `REMINDER_THRESHOLD_MINUTES` 環境變數（設為更大的值），但不建議完全停用。

@@ -12,7 +12,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MCP_SERVICE_DIR="$SCRIPT_DIR/mcp-service"
+MCP_SERVICE_DIR="$SCRIPT_DIR/governor"
 MCP_CONFIG="$HOME/.gemini/antigravity/mcp_config.json"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -37,7 +37,7 @@ confirm "確認繼續卸載？" || { echo "已取消。"; exit 0; }
 
 # ── Step 1: 停止並移除 Docker 容器 ───────────────────────
 info "Step 1 — 停止 Docker 容器..."
-cd "$MCP_SERVICE_DIR" 2>/dev/null || { warn "找不到 mcp-service 目錄，跳過 Docker 操作。"; }
+cd "$MCP_SERVICE_DIR" 2>/dev/null || { warn "找不到 governor 目錄，跳過 Docker 操作。"; }
 
 if docker ps -q --filter "name=system-governor-mcp" | grep -q .; then
   docker compose down
@@ -48,7 +48,7 @@ fi
 
 # ── Step 2: 選擇性移除 Docker Image ──────────────────────
 if confirm "Step 2 — 是否同時移除 Docker Image（釋放磁碟空間）？"; then
-  docker rmi mcp-service-system-governor-mcp 2>/dev/null && success "Image 已移除" || warn "Image 不存在或已移除"
+  docker rmi governor-system-governor-mcp 2>/dev/null && success "Image 已移除" || warn "Image 不存在或已移除"
 else
   info "保留 Docker Image（下次安裝時可快速啟動）"
 fi

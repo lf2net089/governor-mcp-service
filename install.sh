@@ -19,7 +19,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MCP_SERVICE_DIR="$SCRIPT_DIR/mcp-service"
+MCP_SERVICE_DIR="$SCRIPT_DIR/governor"
 MCP_CONFIG="$HOME/.gemini/antigravity/mcp_config.json"
 
 # 狀態和日誌檔案

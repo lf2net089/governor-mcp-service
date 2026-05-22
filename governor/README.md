@@ -113,7 +113,7 @@ curl http://localhost:9090/health
 ### 報告輸出位置
 
 ```
-mcp-service/data/
+governor/data/
 ├── governor.db           ← SQLite 資料庫（所有決策記錄）
 └── reports/
     ├── memo/            ← 1 頁快速記錄

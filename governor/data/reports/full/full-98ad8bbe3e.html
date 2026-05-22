@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Full Engineering Report · API Gateway 重構方案評估</title>
+<style>
+  :root {
+    --bg: #f8fafc; --surface: #fff; --border: #e2e8f0;
+    --ink: #0f172a; --text: #1e293b; --muted: #64748b;
+    --blue: #2563eb; --blue-bg: #eff6ff; --blue-border: #bfdbfe;
+    --cyan: #0891b2; --cyan-bg: #ecfeff; --cyan-border: #a5f3fc;
+    --purple: #7c3aed; --purple-bg: #f5f3ff; --purple-border: #ddd6fe;
+    --amber: #d97706; --amber-bg: #fffbeb; --amber-border: #fde68a;
+    --rose: #e11d48; --rose-bg: #fff1f2; --rose-border: #fecdd3;
+    --emerald: #059669; --emerald-bg: #ecfdf5; --emerald-border: #a7f3d0;
+    --mono: 'Courier New', monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.7; }
+  @media print {
+    body { font-size: 11px; }
+    .page-break { page-break-before: always; }
+    .no-print { display: none; }
+  }
+
+  .page { max-width: 1040px; margin: 0 auto; padding: 40px; }
+  .page + .page { border-top: 3px dashed var(--border); padding-top: 56px; }
+
+  /* Cover bar */
+  .cover {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+    color: white; border-radius: 12px; padding: 32px 36px;
+    margin-bottom: 40px;
+  }
+  .cover-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #38bdf8; margin-bottom: 10px; }
+  .cover-title { font-size: 24px; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 14px; }
+  .cover-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 16px; }
+  .cover-stat { }
+  .cover-stat-label { font-size: 10px; color: #94a3b8; }
+  .cover-stat-value { font-size: 14px; font-weight: 700; color: white; }
+  .cover-page-tag { font-size: 11px; color: #64748b; margin-top: 12px; }
+
+  /* Section */
+  .section { margin-bottom: 36px; }
+  .section-title {
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* Record card */
+  .record-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px 14px; margin-bottom: 8px;
+    border-left: 3px solid var(--border);
+  }
+  .record-card.role-user { border-left-color: var(--blue); }
+  .record-card.role-pm { border-left-color: var(--amber); }
+  .record-card.role-engineer { border-left-color: var(--emerald); }
+  .record-card.role-stakeholder { border-left-color: var(--purple); }
+  .record-card.role-system { border-left-color: var(--muted); }
+
+  .record-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; align-items: center; }
+  .role-badge {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 1px 6px; border-radius: 3px;
+  }
+  .role-user .role-badge { background: var(--blue-bg); color: var(--blue); }
+  .role-pm .role-badge { background: var(--amber-bg); color: var(--amber); }
+  .role-engineer .role-badge { background: var(--emerald-bg); color: var(--emerald); }
+  .role-stakeholder .role-badge { background: var(--purple-bg); color: var(--purple); }
+  .role-system .role-badge { background: #f1f5f9; color: var(--muted); }
+
+  .meta-time { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+  .meta-hash { font-size: 9px; color: #94a3b8; font-family: var(--mono); }
+  .rec-content { font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+
+  /* Flow diagram (CSS-based) */
+  .flow-diagram {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px; margin-bottom: 20px;
+    overflow-x: auto;
+  }
+  .flow-row { display: flex; align-items: center; gap: 0; margin-bottom: 8px; flex-wrap: nowrap; }
+  .flow-node {
+    background: var(--blue-bg); border: 1px solid var(--blue-border);
+    border-radius: 6px; padding: 8px 14px; font-size: 11px; font-weight: 600;
+    color: var(--blue); white-space: nowrap; text-align: center; min-width: 100px;
+  }
+  .flow-node.node-amber { background: var(--amber-bg); border-color: var(--amber-border); color: var(--amber); }
+  .flow-node.node-cyan { background: var(--cyan-bg); border-color: var(--cyan-border); color: var(--cyan); }
+  .flow-node.node-purple { background: var(--purple-bg); border-color: var(--purple-border); color: var(--purple); }
+  .flow-node.node-emerald { background: var(--emerald-bg); border-color: var(--emerald-border); color: var(--emerald); }
+  .flow-node.node-rose { background: var(--rose-bg); border-color: var(--rose-border); color: var(--rose); }
+  .flow-arrow { color: var(--muted); font-size: 14px; padding: 0 6px; }
+
+  /* Stage gate cards */
+  .stage-gate-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 24px; }
+  .stage-gate {
+    border-radius: 8px; padding: 14px; text-align: center; border: 1px solid var(--border);
+  }
+  .stage-gate.passed { background: var(--emerald-bg); border-color: var(--emerald-border); }
+  .stage-gate.blocked { background: var(--rose-bg); border-color: var(--rose-border); }
+  .stage-gate.pending { background: #f8fafc; }
+  .stage-gate-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+  .stage-gate-status { font-size: 18px; font-weight: 800; }
+  .passed .stage-gate-status { color: var(--emerald); }
+  .blocked .stage-gate-status { color: var(--rose); }
+  .pending .stage-gate-status { color: var(--muted); }
+
+  /* JSON block */
+  .json-block {
+    background: #0f172a; border-radius: 8px; padding: 20px 24px;
+    font-family: var(--mono); font-size: 11px; line-height: 1.8;
+    overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+    color: #cbd5e1;
+  }
+  .jk { color: #93c5fd; } /* key */
+  .jv { color: #86efac; } /* value */
+  .jp { color: #fbbf24; } /* pending */
+
+  /* Option A/B cards */
+  .option-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .option-card { border-radius: 8px; padding: 16px; }
+  .option-a { background: var(--rose-bg); border: 1px solid var(--rose-border); }
+  .option-b { background: var(--emerald-bg); border: 1px solid var(--emerald-border); }
+  .option-header { font-size: 12px; font-weight: 800; margin-bottom: 10px; }
+  .option-a .option-header { color: var(--rose); }
+  .option-b .option-header { color: var(--emerald); }
+  .option-field { margin-bottom: 10px; }
+  .option-field-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .option-field-value { font-size: 12px; }
+  .pending { color: var(--rose); font-style: italic; font-size: 12px; }
+
+  /* Hash chain */
+  .hash-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 10px; }
+  .hash-table th { background: #f1f5f9; padding: 5px 8px; text-align: left; color: var(--muted); font-weight: 700; border-bottom: 1px solid var(--border); letter-spacing: 0.04em; }
+  .hash-table td { padding: 4px 8px; border-bottom: 1px solid #f1f5f9; color: var(--muted); }
+
+  /* Action list */
+  .action-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 14px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; margin-bottom: 8px;
+  }
+  .action-num { font-size: 12px; font-weight: 800; color: var(--blue); flex-shrink: 0; width: 20px; text-align: right; }
+  .action-text { font-size: 12px; }
+
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); text-align: center; font-size: 10px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     PAGE 1 — 訪談記錄 + 需求結論
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="cover">
+    <div class="cover-badge">📊 Full Engineering Report · System Governor</div>
+    <div class="cover-title">API Gateway 重構方案評估</div>
+    <div class="cover-grid">
+      <div class="cover-stat"><div class="cover-stat-label">生成時間</div><div class="cover-stat-value">2026-05-22</div></div>
+      <div class="cover-stat"><div class="cover-stat-label">總記錄數</div><div class="cover-stat-value">2</div></div>
+      <div class="cover-stat"><div class="cover-stat-label">Session</div><div class="cover-stat-value" style="font-size:10px;font-family:var(--mono)">sg-a52ac5de59f9</div></div>
+      <div class="cover-stat"><div class="cover-stat-label">狀態</div><div class="cover-stat-value">ACTIVE</div></div>
+    </div>
+    <div class="cover-page-tag">Page 1/3 — 訪談記錄 · 需求結論</div>
+  </div>
+
+  <!-- 流程圖 -->
+  <div class="section">
+    <div class="section-title">📐 System Governor 工作流程圖</div>
+    <div class="flow-diagram">
+      <div class="flow-row">
+        <div class="flow-node node-amber">Stage 01<br>假設對齊</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node node-cyan">Stage 02<br>GitNexus 剖析</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node node-purple">Stage 03<br>架構辯證</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node node-emerald">Report<br>輸出</div>
+      </div>
+      <div class="flow-row" style="margin-top:8px">
+        <div class="flow-node" style="background:#f8fafc;border-color:var(--rose-border);color:var(--rose);min-width:100px;">Hard Code?<br>→ 自動拒絕</div>
+        <div class="flow-arrow" style="visibility:hidden">→</div>
+        <div class="flow-node" style="background:#f8fafc;min-width:100px;">Upstream ✓<br>Downstream ✓</div>
+        <div class="flow-arrow" style="visibility:hidden">→</div>
+        <div class="flow-node" style="background:#f8fafc;min-width:100px;">Critic / Defender<br>/ Judge</div>
+        <div class="flow-arrow" style="visibility:hidden">→</div>
+        <div class="flow-node" style="background:#f8fafc;min-width:100px;">memo / trace<br>/ full</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 訪談記錄 -->
+  <div class="section">
+    <div class="section-title">§1.1 訪談原始記錄</div>
+    
+    
+      
+      <div class="record-card role-user">
+        <div class="record-meta">
+          <span class="role-badge">user</span>
+          <span class="meta-time">2026-05-22 07:39:33</span>
+          <span class="meta-hash">#55170b6b</span>
+          
+        </div>
+        <div class="rec-content">現有 Nginx 配置變得難以維護，考慮遷移到 Kong 或 Envoy</div>
+      </div>
+      
+    
+  </div>
+
+  <!-- 需求結論 -->
+  <div class="section">
+    <div class="section-title">§1.2 需求結論</div>
+    
+    <p class="pending">【⏳ 需求結論 待確認 — sg_record_input(stage='conclusion')】</p>
+  </div>
+
+  <div class="footer">Page 1/3 · Full Engineering Report · 2026-05-22 07:39 UTC · sg-a52ac5de59f9</div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     PAGE 2 — 工程軌跡（Stage 01/02/03）
+═══════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="cover" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);">
+    <div class="cover-badge" style="color:#c4b5fd;">⚙️ Engineering Trace</div>
+    <div class="cover-title">三段工作流軌跡</div>
+    <div class="cover-page-tag">Page 2/3 — Stage 01 假設對齊 · Stage 02 GitNexus · Stage 03 辯證</div>
+  </div>
+
+  <!-- Stage Gate Overview -->
+  <div class="section">
+    <div class="section-title">通關門檻總覽</div>
+    <div class="stage-gate-row">
+      
+      <div class="stage-gate passed">
+        <div class="stage-gate-label">Stage 01 · 假設對齊</div>
+        <div class="stage-gate-status">
+          ✅
+        </div>
+        
+        <div style="font-size:10px;color:var(--muted)">2026-05-22</div>
+        
+      </div>
+      
+      <div class="stage-gate passed">
+        <div class="stage-gate-label">Stage 02 · GitNexus 剖析</div>
+        <div class="stage-gate-status">
+          ✅
+        </div>
+        
+        <div style="font-size:10px;color:var(--muted)">2026-05-22</div>
+        
+      </div>
+      
+      <div class="stage-gate passed">
+        <div class="stage-gate-label">Stage 03 · 架構辯證</div>
+        <div class="stage-gate-status">
+          ✅
+        </div>
+        
+        <div style="font-size:10px;color:var(--muted)">2026-05-22</div>
+        
+      </div>
+      
+    </div>
+  </div>
+
+  <!-- Stage 01 records -->
+  <div class="section">
+    <div class="section-title">§2.1 Stage 01 — 假設對齊討論記錄</div>
+    
+    
+      <div class="record-card role-user">
+        <div class="record-meta"><span class="role-badge">user</span><span class="meta-time">2026-05-22 07:39:33</span><span class="meta-hash">#9a06e18b</span></div>
+        <div class="rec-content">假設：Kong 學習曲線陡，但功能齊全。Envoy 性能優，配置複雜。</div>
+      </div>
+    
+    
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:6px;padding:12px;margin-top:12px;font-size:11px;color:var(--muted)">
+      通關結果：通過 8/8 項
+      
+    </div>
+    
+  </div>
+
+  <!-- Stage 02 records -->
+  <div class="section">
+    <div class="section-title">§2.2 Stage 02 — GitNexus 圖譜剖析記錄</div>
+    
+    <p class="pending">【⏳ GitNexus 剖析討論 待確認】</p>
+    
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:6px;padding:12px;margin-top:12px;font-size:11px;">
+      ✅ 通過 GitNexus 剖析
+    </div>
+    
+  </div>
+
+  <!-- Stage 03 records -->
+  <div class="section">
+    <div class="section-title">§2.3 Stage 03 — 架構辯證記錄</div>
+    
+    <p class="pending">【⏳ 架構辯證討論 待確認】</p>
+  </div>
+
+  <div class="footer">Page 2/3 · Full Engineering Report · 2026-05-22 07:39 UTC · sg-a52ac5de59f9</div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     PAGE 3 — 架構決策 + JSON + 行動清單 + Hash Chain
+═══════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="cover" style="background: linear-gradient(135deg, #14532d 0%, #166534 100%);">
+    <div class="cover-badge" style="color:#86efac;">⚖️ Architecture Decision</div>
+    <div class="cover-title">架構決策 · 行動清單 · 防竄改憑據</div>
+    <div class="cover-page-tag">Page 3/3</div>
+  </div>
+
+  <!-- A/B option comparison -->
+  <div class="section">
+    <div class="section-title">§3.1 方案對比 (architectural_tradeoff)</div>
+    
+    
+    <div class="option-row">
+      <div class="option-card option-a">
+        <div class="option-header">方案 A — 短期妥協方案</div>
+        <div class="option-field">
+          <div class="option-field-label">即時成本</div>
+          <div class="option-field-value">2 週遷移 + 1 週穩定期</div>
+        </div>
+        <div class="option-field">
+          <div class="option-field-label">長期熵增風險</div>
+          <div class="option-field-value">Kong 外掛維護成本不確定</div>
+        </div>
+      </div>
+      <div class="option-card option-b">
+        <div class="option-header">方案 B — 長期防禦方案</div>
+        <div class="option-field">
+          <div class="option-field-label">實作成本</div>
+          <div class="option-field-value">4 週 Envoy 配置 + 2 週性能調優</div>
+        </div>
+        <div class="option-field">
+          <div class="option-field-label">資產價值保護</div>
+          <div class="option-field-value">Envoy 無狀態，完美適配 K8s；社區活躍</div>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+
+  <!-- SystemGovernorResponse JSON -->
+  <div class="section">
+    <div class="section-title">§3.2 SystemGovernorResponse JSON Output</div>
+    
+    <div class="json-block">{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "architectural_tradeoff": {
+    "option_a_short_term": {
+      "immediate_cost": "2 \u9031\u9077\u79fb + 1 \u9031\u7a69\u5b9a\u671f",
+      "long_term_risk_and_entropy": "Kong \u5916\u639b\u7dad\u8b77\u6210\u672c\u4e0d\u78ba\u5b9a"
+    },
+    "option_b_long_term": {
+      "asset_value_protection": "Envoy \u7121\u72c0\u614b\uff0c\u5b8c\u7f8e\u9069\u914d K8s\uff1b\u793e\u5340\u6d3b\u8e8d",
+      "implementation_cost": "4 \u9031 Envoy \u914d\u7f6e + 2 \u9031\u6027\u80fd\u8abf\u512a"
+    }
+  },
+  "gitnexus_flow_audit": {
+    "downstream_impact": "Client SDK \u9700\u66f4\u65b0\u9023\u63a5\u6c60\u908f\u8f2f",
+    "upstream_verification": "Gateway \u5c64\u5df2\u5b8c\u5168\u9694\u96e2\uff0c\u7121\u786c\u4f9d\u8cf4"
+  },
+  "rational_skepticism": {
+    "blind_spot": "Kong vs Envoy \u5728\u9ad8\u4f75\u767c\u4e0b\u7684\u5be6\u969b\u6027\u80fd\u5dee\u7570\u672a\u77e5"
+  },
+  "system_reflection_question": "\u5718\u968a\u662f\u5426\u6709 Go \u7d93\u9a57\u652f\u63f4 Envoy \u81ea\u8a02\u958b\u767c\uff1f",
+  "title": "SystemGovernorResponse"
+}</div>
+    
+  </div>
+
+  <!-- Reflection question -->
+  
+  <div class="section">
+    <div class="section-title">§3.3 系統閉環反問</div>
+    <div style="background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:8px;padding:16px 18px;">
+      <p style="color:var(--purple);font-size:13px;">團隊是否有 Go 經驗支援 Envoy 自訂開發？</p>
+    </div>
+  </div>
+  
+
+  <!-- Pain points & Next session -->
+  
+
+  <!-- Hash Chain -->
+  <div class="section">
+    <div class="section-title">§3.5 防竄改憑據 · 完整 SHA-256 Hash 鏈</div>
+    
+    <table class="hash-table">
+      <tr><th>Record ID</th><th>Hash (前8碼)</th><th>完整 SHA-256</th><th>角色</th><th>階段</th><th>時間</th></tr>
+      
+      <tr>
+        <td>rec-4db7e1370731</td>
+        <td style="color:var(--blue);font-weight:700;">55170b6b</td>
+        <td style="font-size:9px;">55170b6bd6b8a74310cf70d48745b2fdc93068be52ae540f6ba2eb5d14c4cf4f</td>
+        <td>user</td>
+        <td>interview</td>
+        <td>2026-05-22 07:39:33</td>
+      </tr>
+      
+      <tr>
+        <td>rec-f5bda9f660de</td>
+        <td style="color:var(--blue);font-weight:700;">9a06e18b</td>
+        <td style="font-size:9px;">9a06e18b64466f41c32318cd83879e33c5cbf7fbfff9e425560e6443a58132b0</td>
+        <td>user</td>
+        <td>hypothesis</td>
+        <td>2026-05-22 07:39:33</td>
+      </tr>
+      
+    </table>
+    
+  </div>
+
+  <!-- Unfilled summary -->
+  
+  <div style="background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:8px;padding:14px 18px;margin-bottom:24px;">
+    <strong style="color:var(--amber);">⚠️ 尚有 3 個階段未記錄</strong>
+    <ul style="color:var(--amber);font-size:12px;padding-left:16px;margin-top:6px;">
+      <li>gitnexus_audit（GitNexus 剖析）</li><li>tradeoff（架構辯證）</li><li>conclusion（需求結論）</li>
+    </ul>
+    <p style="font-size:11px;color:var(--muted);margin-top:8px;">以上欄位在報告中標示【⏳ 待確認】，系統未做任何推導補全。</p>
+  </div>
+  
+
+  <div class="footer">
+    Page 3/3 · Full Engineering Report · 2026-05-22 07:39 UTC · Session: sg-a52ac5de59f9<br>
+    ⚠️ 本報告所有內容來自 sg_record_input 原始記錄，系統未做任何 AI 推導或幻覺補全。
+    如有任何欄位顯示【⏳ 待確認】，表示該欄位在報告生成時尚無對應記錄。
+  </div>
+</div>
+
+</body>
+</html>

@@ -57,13 +57,13 @@
 **建議調查步驟**：
 ```bash
 # 1. 檢查模板檔是否存在
-ls -la /Users/pericchen/Project/pipagent/mcp-service/templates/
+ls -la /Users/pericchen/Project/pipagent/governor/templates/
 
 # 2. 檢查報告輸出目錄
-ls -la /Users/pericchen/Project/pipagent/mcp-service/data/reports/
+ls -la /Users/pericchen/Project/pipagent/governor/data/reports/
 
 # 3. 確認資料庫中 reports 表的內容
-sqlite3 /Users/pericchen/Project/pipagent/mcp-service/data/governor.db \
+sqlite3 /Users/pericchen/Project/pipagent/governor/data/governor.db \
   "SELECT * FROM reports LIMIT 5;"
 ```
 
@@ -179,7 +179,7 @@ curl -s http://localhost:9090/ | head -20
 1. `/Users/pericchen/Project/pipagent/README.md` — 項目概覽
 2. `~/.claude/skills/system-governor-mcp-guide/SKILL.md` — Agent 使用指南
 3. `~/.claude/skills/system-governor-mcp-guide/quick_memo.md` — Quick Memo 流程
-4. `./mcp-service/README.md` — MCP 服務技術細節
+4. `./governor/README.md` — MCP 服務技術細節
 
 ### 相關 MCP 文檔
 - [FastMCP 官方文檔](https://gofastmcp.com)
@@ -230,7 +230,7 @@ curl -s http://localhost:9090/ | head -20
 如遇技術問題，請參考：
 1. 本文件的「故障排查指南」
 2. 專案根目錄的 `README.md`
-3. MCP 服務的 `./mcp-service/README.md`
+3. MCP 服務的 `./governor/README.md`
 
 遇到重現不了的 Bug？
 - 啟用 debug 日誌：`docker compose logs -f system-governor-mcp`

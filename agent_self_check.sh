@@ -41,7 +41,7 @@ check_docker_container() {
 
 check_database() {
     # 檢查數據庫是否可訪問
-    DB_PATH="/Users/pericchen/Project/pipagent/mcp-service/data/governor.db"
+    DB_PATH="/Users/pericchen/Project/pipagent/governor/data/governor.db"
     if [ -f "$DB_PATH" ]; then
         return 0
     else
@@ -104,7 +104,7 @@ main() {
     echo -e "${BLUE}[4/5] 檢查數據庫${RESET}"
     if check_database; then
         echo -e "      數據庫: ${GREEN}✅ 可訪問${RESET}"
-        echo "      位置: /Users/pericchen/Project/pipagent/mcp-service/data/governor.db"
+        echo "      位置: /Users/pericchen/Project/pipagent/governor/data/governor.db"
         DB_STATUS=1
     else
         echo -e "      數據庫: ${RED}❌ 不存在${RESET}"

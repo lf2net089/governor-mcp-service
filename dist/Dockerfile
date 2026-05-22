@@ -6,11 +6,11 @@ WORKDIR /app
 RUN apk add --no-cache gcc musl-dev sqlite
 
 # Install Python dependencies
-COPY mcp-service/requirements.txt .
+COPY governor/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt aiohttp
 
-# Copy entire MCP service directory
-COPY mcp-service/ ./
+# Copy entire governor service directory
+COPY governor/ ./
 
 # Make entrypoint executable
 RUN chmod +x entrypoint.sh
