@@ -7,7 +7,6 @@ import os
 import asyncio
 from contextlib import asynccontextmanager
 from fastmcp import FastMCP
-from fastmcp.server.http import create_sse_server
 
 from core.db import init_db
 
@@ -202,9 +201,10 @@ async def sg_generate_full(session_id: str) -> dict:
 
 # ─── Health endpoint ─────────────────────────────────────────────────────────
 
+@mcp.custom_route("/health", methods=["GET"])
 async def handle_health(request):
     from starlette.responses import JSONResponse
-    return JSONResponse({"status": "ok", "service": "system-governor-mcp"})
+    return JSONResponse({"status": "ok", "service": "system-governor-mcp", "tools": 15})
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
@@ -212,30 +212,13 @@ async def main():
     # 初始化 DB
     await init_db()
     print(f"✅ System Governor MCP Service 啟動中...")
-    print(f"📡 HTTP/SSE: http://{HOST}:{PORT}/mcp")
+    print(f"📡 HTTP/SSE: http://{HOST}:{PORT}")
     print(f"🏥 Health:   http://{HOST}:{PORT}/health")
     print(f"🗄️  DB:      {os.environ.get('DB_PATH', '/data/governor.db')}")
     print(f"📁 Reports:  {os.environ.get('REPORTS_DIR', '/data/reports')}")
 
-    import uvicorn
-    from starlette.applications import Starlette
-    from starlette.routing import Route, Mount
-    from starlette.responses import JSONResponse
-
-    # Build the SSE app from FastMCP
-    mcp_app = mcp.get_asgi_app()
-
-    async def health(request):
-        return JSONResponse({"status": "ok", "service": "system-governor-mcp", "tools": 15})
-
-    app = Starlette(routes=[
-        Route("/health", health),
-        Mount("/", app=mcp_app),
-    ])
-
-    config = uvicorn.Config(app, host=HOST, port=PORT, log_level="info")
-    server = uvicorn.Server(config)
-    await server.serve()
+    # Run FastMCP HTTP server
+    await mcp.run_http_async(host=HOST, port=PORT)
 
 
 if __name__ == "__main__":

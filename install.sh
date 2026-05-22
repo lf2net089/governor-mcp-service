@@ -92,7 +92,7 @@ else
     # 備份
     cp "$MCP_CONFIG" "${MCP_CONFIG}.backup.$(date +%Y%m%d%H%M%S)"
     # 用 Python 安全注入 JSON（避免手動字串拼接破壞格式）
-    python3 - <<'PYEOF'
+    python3 - <<PYEOF
 import json, sys
 
 config_path = "$MCP_CONFIG"
