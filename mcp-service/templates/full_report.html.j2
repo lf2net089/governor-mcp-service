@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Full Engineering Report · {{ session.topic | truncate(40) }}</title>
+<style>
+  :root {
+    --bg: #f8fafc; --surface: #fff; --border: #e2e8f0;
+    --ink: #0f172a; --text: #1e293b; --muted: #64748b;
+    --blue: #2563eb; --blue-bg: #eff6ff; --blue-border: #bfdbfe;
+    --cyan: #0891b2; --cyan-bg: #ecfeff; --cyan-border: #a5f3fc;
+    --purple: #7c3aed; --purple-bg: #f5f3ff; --purple-border: #ddd6fe;
+    --amber: #d97706; --amber-bg: #fffbeb; --amber-border: #fde68a;
+    --rose: #e11d48; --rose-bg: #fff1f2; --rose-border: #fecdd3;
+    --emerald: #059669; --emerald-bg: #ecfdf5; --emerald-border: #a7f3d0;
+    --mono: 'Courier New', monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.7; }
+  @media print {
+    body { font-size: 11px; }
+    .page-break { page-break-before: always; }
+    .no-print { display: none; }
+  }
+
+  .page { max-width: 1040px; margin: 0 auto; padding: 40px; }
+  .page + .page { border-top: 3px dashed var(--border); padding-top: 56px; }
+
+  /* Cover bar */
+  .cover {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+    color: white; border-radius: 12px; padding: 32px 36px;
+    margin-bottom: 40px;
+  }
+  .cover-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #38bdf8; margin-bottom: 10px; }
+  .cover-title { font-size: 24px; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 14px; }
+  .cover-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 16px; }
+  .cover-stat { }
+  .cover-stat-label { font-size: 10px; color: #94a3b8; }
+  .cover-stat-value { font-size: 14px; font-weight: 700; color: white; }
+  .cover-page-tag { font-size: 11px; color: #64748b; margin-top: 12px; }
+
+  /* Section */
+  .section { margin-bottom: 36px; }
+  .section-title {
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* Record card */
+  .record-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px 14px; margin-bottom: 8px;
+    border-left: 3px solid var(--border);
+  }
+  .record-card.role-user { border-left-color: var(--blue); }
+  .record-card.role-pm { border-left-color: var(--amber); }
+  .record-card.role-engineer { border-left-color: var(--emerald); }
+  .record-card.role-stakeholder { border-left-color: var(--purple); }
+  .record-card.role-system { border-left-color: var(--muted); }
+
+  .record-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; align-items: center; }
+  .role-badge {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 1px 6px; border-radius: 3px;
+  }
+  .role-user .role-badge { background: var(--blue-bg); color: var(--blue); }
+  .role-pm .role-badge { background: var(--amber-bg); color: var(--amber); }
+  .role-engineer .role-badge { background: var(--emerald-bg); color: var(--emerald); }
+  .role-stakeholder .role-badge { background: var(--purple-bg); color: var(--purple); }
+  .role-system .role-badge { background: #f1f5f9; color: var(--muted); }
+
+  .meta-time { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+  .meta-hash { font-size: 9px; color: #94a3b8; font-family: var(--mono); }
+  .rec-content { font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+
+  /* Flow diagram (CSS-based) */
+  .flow-diagram {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px; margin-bottom: 20px;
+    overflow-x: auto;
+  }
+  .flow-row { display: flex; align-items: center; gap: 0; margin-bottom: 8px; flex-wrap: nowrap; }
+  .flow-node {
+    background: var(--blue-bg); border: 1px solid var(--blue-border);
+    border-radius: 6px; padding: 8px 14px; font-size: 11px; font-weight: 600;
+    color: var(--blue); white-space: nowrap; text-align: center; min-width: 100px;
+  }
+  .flow-node.node-amber { background: var(--amber-bg); border-color: var(--amber-border); color: var(--amber); }
+  .flow-node.node-cyan { background: var(--cyan-bg); border-color: var(--cyan-border); color: var(--cyan); }
+  .flow-node.node-purple { background: var(--purple-bg); border-color: var(--purple-border); color: var(--purple); }
+  .flow-node.node-emerald { background: var(--emerald-bg); border-color: var(--emerald-border); color: var(--emerald); }
+  .flow-node.node-rose { background: var(--rose-bg); border-color: var(--rose-border); color: var(--rose); }
+  .flow-arrow { color: var(--muted); font-size: 14px; padding: 0 6px; }
+
+  /* Stage gate cards */
+  .stage-gate-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 24px; }
+  .stage-gate {
+    border-radius: 8px; padding: 14px; text-align: center; border: 1px solid var(--border);
+  }
+  .stage-gate.passed { background: var(--emerald-bg); border-color: var(--emerald-border); }
+  .stage-gate.blocked { background: var(--rose-bg); border-color: var(--rose-border); }
+  .stage-gate.pending { background: #f8fafc; }
+  .stage-gate-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+  .stage-gate-status { font-size: 18px; font-weight: 800; }
+  .passed .stage-gate-status { color: var(--emerald); }
+  .blocked .stage-gate-status { color: var(--rose); }
+  .pending .stage-gate-status { color: var(--muted); }
+
+  /* JSON block */
+  .json-block {
+    background: #0f172a; border-radius: 8px; padding: 20px 24px;
+    font-family: var(--mono); font-size: 11px; line-height: 1.8;
+    overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+    color: #cbd5e1;
+  }
+  .jk { color: #93c5fd; } /* key */
+  .jv { color: #86efac; } /* value */
+  .jp { color: #fbbf24; } /* pending */
+
+  /* Option A/B cards */
+  .option-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .option-card { border-radius: 8px; padding: 16px; }
+  .option-a { background: var(--rose-bg); border: 1px solid var(--rose-border); }
+  .option-b { background: var(--emerald-bg); border: 1px solid var(--emerald-border); }
+  .option-header { font-size: 12px; font-weight: 800; margin-bottom: 10px; }
+  .option-a .option-header { color: var(--rose); }
+  .option-b .option-header { color: var(--emerald); }
+  .option-field { margin-bottom: 10px; }
+  .option-field-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .option-field-value { font-size: 12px; }
+  .pending { color: var(--rose); font-style: italic; font-size: 12px; }
+
+  /* Hash chain */
+  .hash-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 10px; }
+  .hash-table th { background: #f1f5f9; padding: 5px 8px; text-align: left; color: var(--muted); font-weight: 700; border-bottom: 1px solid var(--border); letter-spacing: 0.04em; }
+  .hash-table td { padding: 4px 8px; border-bottom: 1px solid #f1f5f9; color: var(--muted); }
+
+  /* Action list */
+  .action-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 14px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; margin-bottom: 8px;
+  }
+  .action-num { font-size: 12px; font-weight: 800; color: var(--blue); flex-shrink: 0; width: 20px; text-align: right; }
+  .action-text { font-size: 12px; }
+
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); text-align: center; font-size: 10px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     PAGE 1 — 訪談記錄 + 需求結論
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="cover">
+    <div class="cover-badge">📊 Full Engineering Report · System Governor</div>
+    <div class="cover-title">{{ session.topic }}</div>
+    <div class="cover-grid">
+      <div class="cover-stat"><div class="cover-stat-label">生成時間</div><div class="cover-stat-value">{{ generated_at[:10] }}</div></div>
+      <div class="cover-stat"><div class="cover-stat-label">總記錄數</div><div class="cover-stat-value">{{ all_records | length }}</div></div>
+      <div class="cover-stat"><div class="cover-stat-label">Session</div><div class="cover-stat-value" style="font-size:10px;font-family:var(--mono)">{{ session_id }}</div></div>
+      <div class="cover-stat"><div class="cover-stat-label">狀態</div><div class="cover-stat-value">{{ session.status | upper }}</div></div>
+    </div>
+    <div class="cover-page-tag">Page 1/3 — 訪談記錄 · 需求結論</div>
+  </div>
+
+  <!-- 流程圖 -->
+  <div class="section">
+    <div class="section-title">📐 System Governor 工作流程圖</div>
+    <div class="flow-diagram">
+      <div class="flow-row">
+        <div class="flow-node node-amber">Stage 01<br>假設對齊</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node node-cyan">Stage 02<br>GitNexus 剖析</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node node-purple">Stage 03<br>架構辯證</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node node-emerald">Report<br>輸出</div>
+      </div>
+      <div class="flow-row" style="margin-top:8px">
+        <div class="flow-node" style="background:#f8fafc;border-color:var(--rose-border);color:var(--rose);min-width:100px;">Hard Code?<br>→ 自動拒絕</div>
+        <div class="flow-arrow" style="visibility:hidden">→</div>
+        <div class="flow-node" style="background:#f8fafc;min-width:100px;">Upstream ✓<br>Downstream ✓</div>
+        <div class="flow-arrow" style="visibility:hidden">→</div>
+        <div class="flow-node" style="background:#f8fafc;min-width:100px;">Critic / Defender<br>/ Judge</div>
+        <div class="flow-arrow" style="visibility:hidden">→</div>
+        <div class="flow-node" style="background:#f8fafc;min-width:100px;">memo / trace<br>/ full</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 訪談記錄 -->
+  <div class="section">
+    <div class="section-title">§1.1 訪談原始記錄</div>
+    {% set interview_records = by_stage.get('interview', []) %}
+    {% if interview_records %}
+      {% for r in interview_records %}
+      <div class="record-card role-{{ r.role }}">
+        <div class="record-meta">
+          <span class="role-badge">{{ r.role }}</span>
+          <span class="meta-time">{{ r.created_at[:19].replace('T',' ') }}</span>
+          <span class="meta-hash">#{{ r.sha256_hash[:8] if r.sha256_hash else '' }}</span>
+          {% if r.source_note %}<span style="font-size:10px;color:var(--muted)">📌 {{ r.source_note }}</span>{% endif %}
+        </div>
+        <div class="rec-content">{{ r.content }}</div>
+      </div>
+      {% endfor %}
+    {% else %}<p class="pending">【⏳ 訪談記錄 待確認】</p>{% endif %}
+  </div>
+
+  <!-- 需求結論 -->
+  <div class="section">
+    <div class="section-title">§1.2 需求結論</div>
+    {% set conclusion_records = by_stage.get('conclusion', []) %}
+    {% if conclusion_records %}
+      {% for r in conclusion_records %}
+      <div class="record-card role-{{ r.role }}" style="background:var(--emerald-bg);border-color:var(--emerald-border);">
+        <div class="record-meta">
+          <span class="role-badge">{{ r.role }}</span>
+          <span class="meta-time">{{ r.created_at[:19].replace('T',' ') }}</span>
+          <span class="meta-hash">#{{ r.sha256_hash[:8] if r.sha256_hash else '' }}</span>
+        </div>
+        <div class="rec-content">{{ r.content }}</div>
+      </div>
+      {% endfor %}
+    {% else %}<p class="pending">【⏳ 需求結論 待確認 — sg_record_input(stage='conclusion')】</p>{% endif %}
+  </div>
+
+  <div class="footer">Page 1/3 · Full Engineering Report · {{ generated_at }} · {{ session_id }}</div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     PAGE 2 — 工程軌跡（Stage 01/02/03）
+═══════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="cover" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);">
+    <div class="cover-badge" style="color:#c4b5fd;">⚙️ Engineering Trace</div>
+    <div class="cover-title">三段工作流軌跡</div>
+    <div class="cover-page-tag">Page 2/3 — Stage 01 假設對齊 · Stage 02 GitNexus · Stage 03 辯證</div>
+  </div>
+
+  <!-- Stage Gate Overview -->
+  <div class="section">
+    <div class="section-title">通關門檻總覽</div>
+    <div class="stage-gate-row">
+      {% for stage_obj, num, label in [(stage_01,'01','假設對齊'), (stage_02,'02','GitNexus 剖析'), (stage_03,'03','架構辯證')] %}
+      <div class="stage-gate {{ stage_obj.status if stage_obj else 'pending' }}">
+        <div class="stage-gate-label">Stage {{ num }} · {{ label }}</div>
+        <div class="stage-gate-status">
+          {% if not stage_obj %}⏳{% elif stage_obj.status == 'passed' %}✅{% elif stage_obj.status == 'blocked' %}🚫{% else %}{{ stage_obj.status }}{% endif %}
+        </div>
+        {% if stage_obj and stage_obj.completed_at %}
+        <div style="font-size:10px;color:var(--muted)">{{ stage_obj.completed_at[:10] }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Stage 01 records -->
+  <div class="section">
+    <div class="section-title">§2.1 Stage 01 — 假設對齊討論記錄</div>
+    {% set hyp_recs = by_stage.get('hypothesis', []) %}
+    {% if hyp_recs %}{% for r in hyp_recs %}
+      <div class="record-card role-{{ r.role }}">
+        <div class="record-meta"><span class="role-badge">{{ r.role }}</span><span class="meta-time">{{ r.created_at[:19].replace('T',' ') }}</span><span class="meta-hash">#{{ r.sha256_hash[:8] if r.sha256_hash else '' }}</span></div>
+        <div class="rec-content">{{ r.content }}</div>
+      </div>
+    {% endfor %}{% else %}<p class="pending">【⏳ 假設對齊討論 待確認】</p>{% endif %}
+    {% if stage_01 and stage_01.gate_result %}
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:6px;padding:12px;margin-top:12px;font-size:11px;color:var(--muted)">
+      通關結果：通過 {{ stage_01.gate_result.passed_count }}/{{ stage_01.gate_result.total }} 項
+      {% if stage_01.gate_result.failed_items %}| 未通過：{{ stage_01.gate_result.failed_items | join(', ') }}{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Stage 02 records -->
+  <div class="section">
+    <div class="section-title">§2.2 Stage 02 — GitNexus 圖譜剖析記錄</div>
+    {% set audit_recs = by_stage.get('gitnexus_audit', []) %}
+    {% if audit_recs %}{% for r in audit_recs %}
+      <div class="record-card role-{{ r.role }}">
+        <div class="record-meta"><span class="role-badge">{{ r.role }}</span><span class="meta-time">{{ r.created_at[:19].replace('T',' ') }}</span><span class="meta-hash">#{{ r.sha256_hash[:8] if r.sha256_hash else '' }}</span></div>
+        <div class="rec-content">{{ r.content }}</div>
+      </div>
+    {% endfor %}{% else %}<p class="pending">【⏳ GitNexus 剖析討論 待確認】</p>{% endif %}
+    {% if stage_02 and stage_02.gate_result %}
+    <div style="background:{% if stage_02.gate_result.auto_rejected %}var(--rose-bg){% else %}#f8fafc{% endif %};border:1px solid {% if stage_02.gate_result.auto_rejected %}var(--rose-border){% else %}var(--border){% endif %};border-radius:6px;padding:12px;margin-top:12px;font-size:11px;">
+      {% if stage_02.gate_result.auto_rejected %}
+      <strong style="color:var(--rose)">🚫 Strict Critic 拒絕</strong>：{{ stage_02.gate_result.reject_reasons | join(' · ') }}
+      {% else %}✅ 通過 GitNexus 剖析{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Stage 03 records -->
+  <div class="section">
+    <div class="section-title">§2.3 Stage 03 — 架構辯證記錄</div>
+    {% set trade_recs = by_stage.get('tradeoff', []) %}
+    {% if trade_recs %}{% for r in trade_recs %}
+      <div class="record-card role-{{ r.role }}">
+        <div class="record-meta"><span class="role-badge">{{ r.role }}</span><span class="meta-time">{{ r.created_at[:19].replace('T',' ') }}</span><span class="meta-hash">#{{ r.sha256_hash[:8] if r.sha256_hash else '' }}</span></div>
+        <div class="rec-content">{{ r.content }}</div>
+      </div>
+    {% endfor %}{% else %}<p class="pending">【⏳ 架構辯證討論 待確認】</p>{% endif %}
+  </div>
+
+  <div class="footer">Page 2/3 · Full Engineering Report · {{ generated_at }} · {{ session_id }}</div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     PAGE 3 — 架構決策 + JSON + 行動清單 + Hash Chain
+═══════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="cover" style="background: linear-gradient(135deg, #14532d 0%, #166534 100%);">
+    <div class="cover-badge" style="color:#86efac;">⚖️ Architecture Decision</div>
+    <div class="cover-title">架構決策 · 行動清單 · 防竄改憑據</div>
+    <div class="cover-page-tag">Page 3/3</div>
+  </div>
+
+  <!-- A/B option comparison -->
+  <div class="section">
+    <div class="section-title">§3.1 方案對比 (architectural_tradeoff)</div>
+    {% if stage_03 and stage_03.gate_result and stage_03.gate_result.response_json %}
+    {% set resp = stage_03.gate_result.response_json %}
+    <div class="option-row">
+      <div class="option-card option-a">
+        <div class="option-header">方案 A — 短期妥協方案</div>
+        <div class="option-field">
+          <div class="option-field-label">即時成本</div>
+          <div class="option-field-value">{{ resp.architectural_tradeoff.option_a_short_term.immediate_cost }}</div>
+        </div>
+        <div class="option-field">
+          <div class="option-field-label">長期熵增風險</div>
+          <div class="option-field-value">{{ resp.architectural_tradeoff.option_a_short_term.long_term_risk_and_entropy }}</div>
+        </div>
+      </div>
+      <div class="option-card option-b">
+        <div class="option-header">方案 B — 長期防禦方案</div>
+        <div class="option-field">
+          <div class="option-field-label">實作成本</div>
+          <div class="option-field-value">{{ resp.architectural_tradeoff.option_b_long_term.implementation_cost }}</div>
+        </div>
+        <div class="option-field">
+          <div class="option-field-label">資產價值保護</div>
+          <div class="option-field-value">{{ resp.architectural_tradeoff.option_b_long_term.asset_value_protection }}</div>
+        </div>
+      </div>
+    </div>
+    {% else %}<p class="pending">【⏳ 架構辯證結果 待確認 — sg_run_stage_03 尚未執行完整】</p>{% endif %}
+  </div>
+
+  <!-- SystemGovernorResponse JSON -->
+  <div class="section">
+    <div class="section-title">§3.2 SystemGovernorResponse JSON Output</div>
+    {% if stage_03 and stage_03.gate_result and stage_03.gate_result.response_json %}
+    <div class="json-block">{{ stage_03.gate_result.response_json | tojson(indent=2) }}</div>
+    {% else %}
+    <div class="json-block" style="color:#475569;">// sg_run_stage_03 尚未完成，JSON 輸出待確認</div>
+    {% endif %}
+  </div>
+
+  <!-- Reflection question -->
+  {% if stage_03 and stage_03.gate_result and stage_03.gate_result.response_json %}
+  <div class="section">
+    <div class="section-title">§3.3 系統閉環反問</div>
+    <div style="background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:8px;padding:16px 18px;">
+      <p style="color:var(--purple);font-size:13px;">{{ stage_03.gate_result.response_json.system_reflection_question }}</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Pain points & Next session -->
+  {% if by_stage.get('pain_point') or by_stage.get('next_session') %}
+  <div class="section">
+    <div class="section-title">§3.4 待解決痛點 / 下次行動</div>
+    {% for r in by_stage.get('pain_point', []) %}
+    <div class="action-item" style="border-left:3px solid var(--rose);">
+      <span style="font-size:13px;">⚠️</span>
+      <div class="action-text"><strong>痛點：</strong>{{ r.content }}</div>
+    </div>
+    {% endfor %}
+    {% for r in by_stage.get('next_session', []) %}
+    <div class="action-item" style="border-left:3px solid var(--emerald);">
+      <span style="font-size:13px;">📌</span>
+      <div class="action-text"><strong>下次：</strong>{{ r.content }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Hash Chain -->
+  <div class="section">
+    <div class="section-title">§3.5 防竄改憑據 · 完整 SHA-256 Hash 鏈</div>
+    {% if hash_chain %}
+    <table class="hash-table">
+      <tr><th>Record ID</th><th>Hash (前8碼)</th><th>完整 SHA-256</th><th>角色</th><th>階段</th><th>時間</th></tr>
+      {% for h in hash_chain %}
+      <tr>
+        <td>{{ h.record_id }}</td>
+        <td style="color:var(--blue);font-weight:700;">{{ h.short_hash }}</td>
+        <td style="font-size:9px;">{{ h.full_hash }}</td>
+        <td>{{ h.role }}</td>
+        <td>{{ h.stage }}</td>
+        <td>{{ h.created_at[:19].replace('T',' ') }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="pending">【⏳ 尚無 Hash 記錄】</p>{% endif %}
+  </div>
+
+  <!-- Unfilled summary -->
+  {% if unfilled_stages %}
+  <div style="background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:8px;padding:14px 18px;margin-bottom:24px;">
+    <strong style="color:var(--amber);">⚠️ 尚有 {{ unfilled_stages | length }} 個階段未記錄</strong>
+    <ul style="color:var(--amber);font-size:12px;padding-left:16px;margin-top:6px;">
+      {% for u in unfilled_stages %}<li>{{ u }}</li>{% endfor %}
+    </ul>
+    <p style="font-size:11px;color:var(--muted);margin-top:8px;">以上欄位在報告中標示【⏳ 待確認】，系統未做任何推導補全。</p>
+  </div>
+  {% endif %}
+
+  <div class="footer">
+    Page 3/3 · Full Engineering Report · {{ generated_at }} · Session: {{ session_id }}<br>
+    ⚠️ 本報告所有內容來自 sg_record_input 原始記錄，系統未做任何 AI 推導或幻覺補全。
+    如有任何欄位顯示【⏳ 待確認】，表示該欄位在報告生成時尚無對應記錄。
+  </div>
+</div>
+
+</body>
+</html>

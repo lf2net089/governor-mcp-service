@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stage 03 · 架構辯證 — System Governor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-void: #020408;
+      --bg-card: rgba(10, 25, 47, 0.7);
+      --border-subtle: rgba(167,139,250,0.08);
+      --accent: #a78bfa;
+      --accent-dim: rgba(167,139,250,0.1);
+      --accent-rose: #f43f5e;
+      --accent-emerald: #34d399;
+      --accent-amber: #fbbf24;
+      --accent-cyan: #38bdf8;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #475569;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-void);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(167,139,250,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(167,139,250,0.02) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+    }
+
+    .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+
+    .sidebar {
+      background: rgba(5, 12, 20, 0.95);
+      border-right: 1px solid rgba(167,139,250,0.06);
+      padding: 32px 24px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .back-link { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); text-decoration: none; margin-bottom: 32px; transition: color 0.2s; }
+    .back-link:hover { color: var(--text-secondary); }
+    .sidebar-stage { font-size: 10px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+    .sidebar-title { font-size: 18px; font-weight: 800; color: var(--text-primary); line-height: 1.3; margin-bottom: 16px; }
+    .sidebar-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 32px; }
+
+    .role-card {
+      background: rgba(5,12,20,0.8);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .role-active { border-color: rgba(167,139,250,0.25); }
+
+    .role-name { font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+    .role-desc { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+
+    .role-critic .role-name { color: var(--accent-rose); }
+    .role-defender .role-name { color: var(--accent-cyan); }
+    .role-judge .role-name { color: var(--accent-amber); }
+
+    /* Main */
+    .main { padding: 48px 48px; max-width: 960px; }
+    .breadcrumb { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+    .main-title { font-size: 28px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em; margin-bottom: 8px; }
+    .main-subtitle { font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 40px; }
+
+    /* Roles debate */
+    .debate-stage {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    .debater {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 20px;
+      backdrop-filter: blur(12px);
+      transition: all 0.3s;
+    }
+
+    .debater-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .debater-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .avatar-critic { background: rgba(244,63,94,0.12); border: 1px solid rgba(244,63,94,0.2); }
+    .avatar-defender { background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.2); }
+    .avatar-judge { background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.2); }
+
+    .debater-role { font-size: 11px; font-weight: 700; }
+    .debater-subtitle { font-size: 10px; color: var(--text-muted); }
+
+    .critic .debater-role { color: var(--accent-rose); }
+    .defender .debater-role { color: var(--accent-cyan); }
+    .judge .debater-role { color: var(--accent-amber); }
+
+    .debater-input {
+      width: 100%;
+      background: rgba(5,12,20,0.8);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      color: var(--text-secondary);
+      resize: vertical;
+      outline: none;
+      line-height: 1.6;
+      min-height: 110px;
+      border: 1px solid rgba(255,255,255,0.05);
+      transition: border-color 0.2s;
+    }
+
+    .critic .debater-input:focus { border-color: rgba(244,63,94,0.2); }
+    .defender .debater-input:focus { border-color: rgba(56,189,248,0.2); }
+    .judge .debater-input:focus { border-color: rgba(251,191,36,0.2); }
+    .debater-input::placeholder { color: var(--text-muted); font-size: 11px; line-height: 1.6; }
+
+    /* Options A vs B */
+    .options-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    .option-card {
+      background: var(--bg-card);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(12px);
+      border: 1px solid transparent;
+      transition: all 0.3s;
+    }
+
+    .option-a { border-color: rgba(244,63,94,0.12); }
+    .option-b { border-color: rgba(52,211,153,0.12); }
+
+    .option-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .option-badge {
+      font-size: 18px;
+      font-weight: 900;
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .badge-a { background: rgba(244,63,94,0.1); border: 1px solid rgba(244,63,94,0.2); color: var(--accent-rose); }
+    .badge-b { background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.2); color: var(--accent-emerald); }
+
+    .option-title { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+    .option-subtitle { font-size: 11px; color: var(--text-muted); }
+
+    .option-fields { display: flex; flex-direction: column; gap: 14px; }
+
+    .option-field-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .option-a .option-field-label-cost { color: var(--accent-rose); }
+    .option-a .option-field-label-risk { color: rgba(244,63,94,0.6); }
+    .option-b .option-field-label-cost { color: var(--accent-emerald); }
+    .option-b .option-field-label-risk { color: rgba(52,211,153,0.6); }
+
+    .option-textarea {
+      width: 100%;
+      background: rgba(5,12,20,0.8);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      color: var(--text-secondary);
+      resize: vertical;
+      outline: none;
+      line-height: 1.6;
+      min-height: 80px;
+      border: 1px solid rgba(255,255,255,0.05);
+      transition: border-color 0.2s;
+    }
+
+    .option-a .option-textarea:focus { border-color: rgba(244,63,94,0.2); }
+    .option-b .option-textarea:focus { border-color: rgba(52,211,153,0.2); }
+    .option-textarea::placeholder { color: var(--text-muted); font-size: 11px; }
+
+    /* Reflection question */
+    .reflection-section {
+      background: var(--bg-card);
+      border: 1px solid rgba(167,139,250,0.15);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 32px;
+    }
+
+    .reflection-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .reflection-title { font-size: 14px; font-weight: 700; color: var(--accent); }
+
+    .reflection-textarea {
+      width: 100%;
+      background: rgba(5,12,20,0.8);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      color: var(--text-primary);
+      resize: vertical;
+      outline: none;
+      line-height: 1.8;
+      min-height: 80px;
+      border: 1px solid rgba(167,139,250,0.12);
+      transition: border-color 0.2s;
+    }
+    .reflection-textarea:focus { border-color: rgba(167,139,250,0.3); }
+    .reflection-textarea::placeholder { color: var(--text-muted); font-style: italic; font-size: 12px; }
+
+    /* JSON output */
+    .json-section {
+      background: rgba(5,12,20,0.95);
+      border: 1px solid rgba(167,139,250,0.15);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 32px;
+    }
+
+    .json-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      background: rgba(0,0,0,0.3);
+      border-bottom: 1px solid rgba(167,139,250,0.08);
+    }
+
+    .json-toolbar-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .json-toolbar-title span { color: var(--accent-cyan); }
+
+    .copy-btn {
+      background: rgba(167,139,250,0.08);
+      border: 1px solid rgba(167,139,250,0.2);
+      color: var(--accent);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .copy-btn:hover { background: rgba(167,139,250,0.15); }
+    .copy-btn.copied { background: rgba(52,211,153,0.1); color: var(--accent-emerald); border-color: rgba(52,211,153,0.2); }
+
+    .json-output {
+      padding: 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.9;
+      color: #cbd5e1;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 520px;
+      overflow-y: auto;
+    }
+
+    .json-key { color: #93c5fd; }
+    .json-str { color: #86efac; }
+    .json-schema { color: #fbbf24; }
+    .json-placeholder { color: var(--text-muted); font-style: italic; }
+
+    /* Generate button */
+    .gen-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      color: white;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-family: 'Inter', sans-serif;
+      margin-bottom: 24px;
+    }
+    .gen-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(167,139,250,0.3); }
+
+    /* Schema fields map */
+    .schema-map {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .schema-field {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 12px 14px;
+      text-align: center;
+    }
+
+    .schema-field-name { font-size: 10px; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; margin-bottom: 4px; }
+    .schema-field-status { font-size: 11px; color: var(--text-muted); }
+    .schema-field.filled .schema-field-status { color: var(--accent-emerald); }
+
+    /* Actions */
+    .actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      padding-top: 24px;
+      border-top: 1px solid rgba(167,139,250,0.08);
+    }
+
+    .btn { padding: 12px 24px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; font-family: 'Inter', sans-serif; }
+    .btn-secondary { background: rgba(255,255,255,0.05); color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.08); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.08); }
+    .btn-primary { background: var(--accent); color: #020408; }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(167,139,250,0.3); }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <a href="index.html" class="back-link">← 返回主控台</a>
+      <div class="sidebar-stage">Stage 03 / 03</div>
+      <div class="sidebar-title">不將就的<br>架構辯證</div>
+      <div class="sidebar-desc">多角色強制辯論，輸出 JSON Schema 格式的最終不妥協決策，並附上閉環反問。</div>
+
+      <div class="section-label" style="margin-bottom:12px;">辯論角色</div>
+
+      <div class="role-card role-critic">
+        <div class="role-name">🔴 Strict Critic</div>
+        <div class="role-desc">嚴厲審查官。找出所有將就、技術債與隱藏代價。只說「不行，因為⋯⋯」。</div>
+      </div>
+      <div class="role-card role-defender">
+        <div class="role-name">🔵 Rational Defender</div>
+        <div class="role-desc">理性辯護方。提出長期防禦架構，以 GitNexus 實證支撐，不允許空談。</div>
+      </div>
+      <div class="role-card role-judge">
+        <div class="role-name">🟡 Impartial Judge</div>
+        <div class="role-desc">公正裁判。綜合雙方論點，輸出 A/B 方案最終成本辯證，提出閉環反問。</div>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+      <div class="breadcrumb">System Governor → Stage 03</div>
+      <div class="main-title">⚖️ 不將就的架構辯證</div>
+      <div class="main-subtitle">
+        透過三角色強制辯論，消除「大概這樣就好」的妥協心態。
+        最終輸出必須包裹於 <code style="font-family:JetBrains Mono;font-size:12px;color:var(--accent-cyan)">SystemGovernorResponse</code> JSON Schema 格式。
+      </div>
+
+      <!-- Schema completeness map -->
+      <div class="schema-map" id="schemaMap">
+        <div class="schema-field" id="sf1">
+          <div class="schema-field-name">blind_spot</div>
+          <div class="schema-field-status">⏳ 待填入</div>
+        </div>
+        <div class="schema-field" id="sf2">
+          <div class="schema-field-name">upstream_verification</div>
+          <div class="schema-field-status">⏳ 待填入</div>
+        </div>
+        <div class="schema-field" id="sf3">
+          <div class="schema-field-name">downstream_impact</div>
+          <div class="schema-field-status">⏳ 待填入</div>
+        </div>
+        <div class="schema-field" id="sf4">
+          <div class="schema-field-name">reflection_question</div>
+          <div class="schema-field-status">⏳ 待填入</div>
+        </div>
+      </div>
+
+      <!-- Three-role debate -->
+      <div class="section-label">三角色辯論台</div>
+      <div class="debate-stage">
+        <div class="debater critic">
+          <div class="debater-header">
+            <div class="debater-avatar avatar-critic">🔴</div>
+            <div>
+              <div class="debater-role">Strict Critic</div>
+              <div class="debater-subtitle">嚴厲審查官 · blind_spot</div>
+            </div>
+          </div>
+          <textarea class="debater-input" id="blindSpot" placeholder="指出使用者的思維漏洞。
+
+在哪個邏輯節點選擇了『將就』？
+前置假設是否被污染？
+業務目標是否被稀釋？
+
+一針見血，不留情面。" oninput="updateField('sf1', this)"></textarea>
+        </div>
+
+        <div class="debater defender">
+          <div class="debater-header">
+            <div class="debater-avatar avatar-defender">🔵</div>
+            <div>
+              <div class="debater-role">Rational Defender</div>
+              <div class="debater-subtitle">理性辯護 · GitNexus 實證</div>
+            </div>
+          </div>
+          <textarea class="debater-input" id="defenseNote" placeholder="以 GitNexus 圖譜數據為依據，提出長期防禦方案。
+
+不允許空談——每個主張必須對應：
+• 哪個 Upstream 數據源已驗證
+• 哪個 Downstream 副作用已評估
+
+不是「我覺得可以」，是「圖譜顯示⋯⋯」。"></textarea>
+        </div>
+
+        <div class="debater judge">
+          <div class="debater-header">
+            <div class="debater-avatar avatar-judge">🟡</div>
+            <div>
+              <div class="debater-role">Impartial Judge</div>
+              <div class="debater-subtitle">公正裁判 · 最終裁決</div>
+            </div>
+          </div>
+          <textarea class="debater-input" id="judgeVerdict" placeholder="綜合 Critic 的盲點揭示與 Defender 的圖譜實證：
+
+A/B 方案哪個更符合長期系統健康？
+熵增風險如何量化？
+使用者必須在哪個時間點做出不可逆的架構決策？"></textarea>
+        </div>
+      </div>
+
+      <!-- Option A vs B -->
+      <div class="section-label">方案對比 · architectural_tradeoff</div>
+      <div class="options-grid">
+        <div class="option-card option-a">
+          <div class="option-header">
+            <div class="option-badge badge-a">A</div>
+            <div>
+              <div class="option-title">短期妥協方案</div>
+              <div class="option-subtitle">option_a_short_term</div>
+            </div>
+          </div>
+          <div class="option-fields">
+            <div>
+              <div class="option-field-label option-field-label-cost">即時成本 (immediate_cost)</div>
+              <textarea class="option-textarea" id="optAImmediate" placeholder="實作這個短期方案，現在需要花費的人天/工作量/複雜度⋯⋯" oninput="checkGenReady()"></textarea>
+            </div>
+            <div>
+              <div class="option-field-label option-field-label-risk">長期熵增風險 (long_term_risk_and_entropy)</div>
+              <textarea class="option-textarea" id="optARisk" placeholder="6 個月後這個方案會在系統中積累什麼熵？誰會踩到這個技術債？系統可觀測性會如何惡化？" oninput="checkGenReady()"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="option-card option-b">
+          <div class="option-header">
+            <div class="option-badge badge-b">B</div>
+            <div>
+              <div class="option-title">長期防禦方案</div>
+              <div class="option-subtitle">option_b_long_term</div>
+            </div>
+          </div>
+          <div class="option-fields">
+            <div>
+              <div class="option-field-label option-field-label-cost">實作成本 (implementation_cost)</div>
+              <textarea class="option-textarea" id="optBCost" placeholder="建立正確抽象層、調整架構所需的真實成本。包括重構範圍、測試覆蓋、Review 週期⋯⋯" oninput="checkGenReady()"></textarea>
+            </div>
+            <div>
+              <div class="option-field-label option-field-label-risk">資產價值保護 (asset_value_protection)</div>
+              <textarea class="option-textarea" id="optBValue" placeholder="這個長期方案如何保護系統的可維護性、擴展性與測試性？GitNexus 圖譜中哪些節點不再是脆弱點？" oninput="checkGenReady()"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- System reflection question -->
+      <div class="reflection-section">
+        <div class="reflection-header">
+          <span style="font-size:20px;">❓</span>
+          <div class="reflection-title">系統思維閉環反問 · system_reflection_question</div>
+        </div>
+        <textarea class="reflection-textarea" id="reflectionQ" placeholder="留下一道硬核思考題，逼迫使用者用 GitNexus 進行下一輪自我驗證。
+
+例如：「在你選擇方案 B 之前，請先用 gitnexus impact 確認：UserRepository 的重構是否會影響現有 3 個正在生產環境運行的批次任務？如果影響，你的回滾策略是什麼？」" oninput="updateField('sf4', this)"></textarea>
+      </div>
+
+      <!-- Generate JSON -->
+      <button class="gen-btn" onclick="generateJSON()">⚙️ 生成 SystemGovernorResponse JSON 輸出</button>
+
+      <!-- JSON Output -->
+      <div class="json-section">
+        <div class="json-toolbar">
+          <div class="json-toolbar-title">📄 <span>SystemGovernorResponse</span> · JSON Schema Output</div>
+          <button class="copy-btn" id="copyBtn" onclick="copyJSON()">複製 JSON</button>
+        </div>
+        <div class="json-output" id="jsonOutput"><span class="json-placeholder">// 填寫上方欄位後，點擊「生成 JSON 輸出」按鈕
+// 輸出將嚴格對齊 SystemGovernorResponse Schema（draft-07）
+// 確保自動化工作流解析時格式絕對不飄移</span></div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-secondary" onclick="location.href='02_gitnexus_flow_audit.html'">← Stage 02</button>
+        <button class="btn btn-secondary" onclick="location.href='index.html'">🏠 回主控台</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function updateField(fieldId, textarea) {
+      const field = document.getElementById(fieldId);
+      if (textarea.value.trim()) {
+        field.classList.add('filled');
+        field.querySelector('.schema-field-status').textContent = '✅ 已填入';
+        field.querySelector('.schema-field-status').style.color = 'var(--accent-emerald)';
+      } else {
+        field.classList.remove('filled');
+        field.querySelector('.schema-field-status').textContent = '⏳ 待填入';
+        field.querySelector('.schema-field-status').style.color = '';
+      }
+    }
+
+    function checkGenReady() {
+      // Optional: auto-update schema map for option fields
+    }
+
+    // Map blind_spot to sf1, upstream to sf2, downstream to sf3 (from prev stage or manual)
+    document.getElementById('blindSpot').addEventListener('input', function() {
+      updateField('sf1', this);
+    });
+
+    document.getElementById('reflectionQ').addEventListener('input', function() {
+      updateField('sf4', this);
+    });
+
+    let lastJSON = '';
+
+    function generateJSON() {
+      const blindSpot = document.getElementById('blindSpot').value.trim() || '（Strict Critic 尚未填入）';
+      const upstreamV = '（請從 Stage 02 GitNexus 剖析結果帶入）';
+      const downstreamI = '（請從 Stage 02 GitNexus 剖析結果帶入）';
+      const optAImmediate = document.getElementById('optAImmediate').value.trim() || '（待填入）';
+      const optARisk = document.getElementById('optARisk').value.trim() || '（待填入）';
+      const optBCost = document.getElementById('optBCost').value.trim() || '（待填入）';
+      const optBValue = document.getElementById('optBValue').value.trim() || '（待填入）';
+      const reflectionQ = document.getElementById('reflectionQ').value.trim() || '（系統閉環反問尚未設定）';
+
+      const obj = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "SystemGovernorResponse",
+        "rational_skepticism": {
+          "blind_spot": blindSpot
+        },
+        "gitnexus_flow_audit": {
+          "upstream_verification": upstreamV,
+          "downstream_impact": downstreamI
+        },
+        "architectural_tradeoff": {
+          "option_a_short_term": {
+            "immediate_cost": optAImmediate,
+            "long_term_risk_and_entropy": optARisk
+          },
+          "option_b_long_term": {
+            "implementation_cost": optBCost,
+            "asset_value_protection": optBValue
+          }
+        },
+        "system_reflection_question": reflectionQ
+      };
+
+      lastJSON = JSON.stringify(obj, null, 2);
+      renderJSON(lastJSON);
+    }
+
+    function renderJSON(raw) {
+      const el = document.getElementById('jsonOutput');
+      // Simple syntax highlighting
+      let html = raw
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/("([^"]+)")\s*:/g, '<span class="json-key">$1</span>:')
+        .replace(/:\s*("([^"]*)")/g, ': <span class="json-str">$1</span>')
+        .replace(/("http[^"]*")/g, '<span class="json-schema">$1</span>');
+      el.innerHTML = html;
+    }
+
+    function copyJSON() {
+      if (!lastJSON) { generateJSON(); }
+      navigator.clipboard.writeText(lastJSON).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = '✅ 已複製';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = '複製 JSON';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>

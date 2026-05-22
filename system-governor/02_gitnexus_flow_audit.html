@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stage 02 · GitNexus 圖譜剖析 — System Governor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-void: #020408;
+      --bg-card: rgba(10, 25, 47, 0.7);
+      --border-subtle: rgba(56,189,248,0.08);
+      --accent: #38bdf8;
+      --accent-dim: rgba(56,189,248,0.1);
+      --accent-rose: #f43f5e;
+      --accent-emerald: #34d399;
+      --accent-amber: #fbbf24;
+      --accent-purple: #a78bfa;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #475569;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-void);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(56,189,248,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56,189,248,0.02) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      background: rgba(5, 12, 20, 0.95);
+      border-right: 1px solid rgba(56,189,248,0.06);
+      padding: 32px 24px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      margin-bottom: 32px;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--text-secondary); }
+
+    .sidebar-stage { font-size: 10px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+    .sidebar-title { font-size: 18px; font-weight: 800; color: var(--text-primary); line-height: 1.3; margin-bottom: 16px; }
+    .sidebar-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 32px; }
+
+    .nav-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px; margin-bottom: 4px;
+      cursor: pointer; font-size: 13px; color: var(--text-secondary);
+      transition: all 0.2s; border: 1px solid transparent;
+    }
+    .nav-item:hover { background: var(--accent-dim); color: var(--accent); border-color: rgba(56,189,248,0.15); }
+    .nav-item.active { background: var(--accent-dim); color: var(--accent); border-color: rgba(56,189,248,0.25); font-weight: 600; }
+
+    .nav-num {
+      width: 22px; height: 22px; border-radius: 6px;
+      background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: var(--accent); flex-shrink: 0;
+    }
+
+    /* Reject Banner (hidden by default) */
+    #rejectBanner {
+      display: none;
+      background: rgba(244,63,94,0.08);
+      border: 1px solid rgba(244,63,94,0.3);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 32px;
+      animation: slideIn 0.4s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .reject-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .reject-icon { font-size: 28px; }
+
+    .reject-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--accent-rose);
+    }
+
+    .reject-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .reject-desc strong { color: var(--accent-rose); }
+
+    /* Main */
+    .main { padding: 48px 48px; max-width: 900px; }
+
+    .main-header { margin-bottom: 40px; }
+    .breadcrumb { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+    .main-title { font-size: 28px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em; margin-bottom: 8px; }
+    .main-subtitle { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+
+    /* Input Panel */
+    .input-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 32px;
+      backdrop-filter: blur(20px);
+    }
+
+    .panel-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .input-group { margin-bottom: 16px; }
+    .input-label {
+      font-size: 12px; font-weight: 600; color: var(--text-secondary);
+      margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+    }
+    .input-label span { color: var(--accent-rose); }
+
+    input[type="text"], textarea {
+      width: 100%;
+      background: rgba(5, 12, 20, 0.8);
+      border: 1px solid rgba(56,189,248,0.12);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.2s;
+      resize: vertical;
+    }
+    input[type="text"]:focus, textarea:focus {
+      border-color: rgba(56,189,248,0.35);
+      box-shadow: 0 0 0 3px rgba(56,189,248,0.05);
+    }
+    input::placeholder, textarea::placeholder { color: var(--text-muted); font-family: 'Inter', sans-serif; }
+
+    .run-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent);
+      color: #020408;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+    .run-btn:hover { background: #7dd3fc; transform: translateY(-1px); box-shadow: 0 8px 20px rgba(56,189,248,0.2); }
+
+    /* Flow Graph */
+    .flow-graph {
+      background: rgba(5,12,20,0.9);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 28px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .flow-graph-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .flow-row {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      margin-bottom: 16px;
+    }
+
+    .flow-side {
+      flex: 1;
+    }
+
+    .flow-center {
+      width: 120px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 0 8px;
+    }
+
+    .flow-node {
+      background: rgba(56,189,248,0.08);
+      border: 1px solid rgba(56,189,248,0.2);
+      border-radius: 10px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+
+    .flow-node-label { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+    .flow-node-value { font-size: 12px; color: var(--accent); font-weight: 600; }
+
+    .upstream-node {
+      background: rgba(167,139,250,0.06);
+      border: 1px solid rgba(167,139,250,0.15);
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      font-size: 11px;
+      color: var(--accent-purple);
+    }
+
+    .downstream-node {
+      background: rgba(52,211,153,0.06);
+      border: 1px solid rgba(52,211,153,0.15);
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      font-size: 11px;
+      color: var(--accent-emerald);
+    }
+
+    .arrow { font-size: 18px; color: var(--text-muted); }
+
+    /* Audit results */
+    .audit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+
+    .audit-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 20px;
+      backdrop-filter: blur(12px);
+    }
+
+    .audit-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .audit-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .dot-purple { background: var(--accent-purple); box-shadow: 0 0 8px rgba(167,139,250,0.4); }
+    .dot-emerald { background: var(--accent-emerald); box-shadow: 0 0 8px rgba(52,211,153,0.4); }
+
+    .audit-card-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+    .audit-card-subtitle { font-size: 11px; color: var(--text-muted); }
+
+    .audit-textarea {
+      width: 100%;
+      background: rgba(5,12,20,0.8);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      color: var(--text-secondary);
+      resize: vertical;
+      outline: none;
+      min-height: 100px;
+      line-height: 1.6;
+      transition: border-color 0.2s;
+    }
+    .audit-textarea:focus { border-color: rgba(56,189,248,0.2); }
+    .audit-textarea::placeholder { color: var(--text-muted); font-style: italic; }
+
+    /* Hard code detector */
+    .detector {
+      background: var(--bg-card);
+      border: 1px solid rgba(244,63,94,0.12);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 28px;
+    }
+
+    .detector-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .detector-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-rose);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .detector-items {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .detector-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      background: rgba(5,12,20,0.6);
+      border: 1px solid transparent;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .detector-item.triggered { border-color: rgba(244,63,94,0.3); background: rgba(244,63,94,0.05); }
+    .detector-item.clear { border-color: rgba(52,211,153,0.2); background: rgba(52,211,153,0.03); }
+
+    .detector-status {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    .status-neutral { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
+    .status-triggered { background: rgba(244,63,94,0.12); border: 1px solid rgba(244,63,94,0.25); color: var(--accent-rose); }
+    .status-clear { background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.2); color: var(--accent-emerald); }
+
+    .detector-item-content { flex: 1; }
+    .detector-item-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+    .detector-item-desc { font-size: 11px; color: var(--text-muted); }
+    .detector-item.triggered .detector-item-title { color: var(--accent-rose); }
+    .detector-item.clear .detector-item-title { color: var(--accent-emerald); }
+
+    /* Actions */
+    .actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      padding-top: 32px;
+      border-top: 1px solid rgba(56,189,248,0.08);
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.05);
+      color: var(--text-secondary);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.08); }
+
+    .btn-reject {
+      background: rgba(244,63,94,0.1);
+      color: var(--accent-rose);
+      border: 1px solid rgba(244,63,94,0.2);
+    }
+    .btn-reject:hover { background: rgba(244,63,94,0.15); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #020408;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(56,189,248,0.25); }
+    .btn-primary:disabled { opacity: 0.3; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    .section { margin-bottom: 32px; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <a href="index.html" class="back-link">← 返回主控台</a>
+      <div class="sidebar-stage">Stage 02 / 03</div>
+      <div class="sidebar-title">GitNexus<br>圖譜全鏈路剖析</div>
+      <div class="sidebar-desc">
+        調用 GitNexus 靜態分析，追蹤目標函式的 Upstream 數據來源
+        與 Downstream 副作用。偵測硬編碼，阻斷局部最佳化幻想。
+      </div>
+
+      <div class="nav-label">剖析步驟</div>
+      <div class="nav-item active">
+        <span class="nav-num">①</span> 目標節點輸入
+      </div>
+      <div class="nav-item">
+        <span class="nav-num">②</span> Upstream 驗證
+      </div>
+      <div class="nav-item">
+        <span class="nav-num">③</span> Downstream 評估
+      </div>
+      <div class="nav-item">
+        <span class="nav-num">④</span> Hard Code 偵測
+      </div>
+      <div class="nav-item">
+        <span class="nav-num">⑤</span> 自動裁決
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+      <div class="main-header">
+        <div class="breadcrumb">System Governor → Stage 02</div>
+        <div class="main-title">🔬 GitNexus 圖譜全鏈路剖析</div>
+        <div class="main-subtitle">
+          輸入目標節點，GitNexus 將追蹤其完整 Upstream/Downstream 鏈路。
+          偵測到硬編碼或 UI 遮醜，系統自動觸發拒絕分支。
+        </div>
+      </div>
+
+      <!-- Reject Banner (triggered by hard code detection) -->
+      <div id="rejectBanner">
+        <div class="reject-header">
+          <span class="reject-icon">🚫</span>
+          <div>
+            <div class="reject-title">Strict Critic 拒絕分支已觸發</div>
+          </div>
+        </div>
+        <div class="reject-desc">
+          <strong>技術警告：</strong> 偵測到使用了前端隱藏（UI 遮醜）或硬編碼（Hard Code）的局部補丁。
+          此類將就方案無法通過系統治理標準。<br><br>
+          任務已退回。請重新返回 <a href="01_prior_hypotheses_align.html" style="color:var(--accent-rose)">Stage 01</a>，
+          提出以 GitNexus 圖譜為依據的<strong>長期防禦方案</strong>後，再重新送審。
+        </div>
+      </div>
+
+      <!-- Step 1: Target Input -->
+      <div class="section">
+        <div class="input-panel">
+          <div class="panel-title">🎯 Step 1 — 目標分析節點輸入</div>
+          <div class="field-grid">
+            <div class="input-group">
+              <div class="input-label">File Path <span>*</span></div>
+              <input type="text" placeholder="src/modules/user/user.service.ts" id="filePath">
+            </div>
+            <div class="input-group">
+              <div class="input-label">Function / Method Name <span>*</span></div>
+              <input type="text" placeholder="getUserStatus" id="funcName">
+            </div>
+          </div>
+          <div class="input-group">
+            <div class="input-label">目的說明（此次改動要做什麼？）</div>
+            <textarea rows="2" placeholder="例如：修改 getUserStatus，當使用者帳號被停用時回傳 403 而非 200..."></textarea>
+          </div>
+          <button class="run-btn" onclick="runAudit()">
+            🔍 執行 GitNexus 圖譜剖析
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 2: Flow Graph (visible after run) -->
+      <div class="section" id="flowGraphSection" style="display:none;">
+        <div class="flow-graph">
+          <div class="flow-graph-title">📊 GitNexus Static Call Graph · <span id="graphTarget">—</span></div>
+
+          <div style="display:grid;grid-template-columns:1fr 80px 1fr;gap:0;align-items:start">
+            <!-- Upstream -->
+            <div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent-purple);margin-bottom:12px;">↑ UPSTREAM (數據來源)</div>
+              <div class="upstream-node" id="up1">📦 資料庫層 · UserRepository.findById()</div>
+              <div class="upstream-node" id="up2">🌐 外部 API · AuthService.verifyToken()</div>
+              <div class="upstream-node" id="up3">📋 快取層 · RedisCache.getUserSession()</div>
+            </div>
+
+            <!-- Center node -->
+            <div style="display:flex;align-items:center;justify-content:center;padding-top:40px;">
+              <div style="text-align:center">
+                <div style="font-size:18px;color:var(--text-muted);">↓</div>
+                <div style="background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);border-radius:10px;padding:10px 8px;margin:6px 0;">
+                  <div style="font-size:9px;color:var(--accent);font-weight:700;" id="centerNode">TARGET</div>
+                </div>
+                <div style="font-size:18px;color:var(--text-muted);">↓</div>
+              </div>
+            </div>
+
+            <!-- Downstream -->
+            <div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent-emerald);margin-bottom:12px;">↓ DOWNSTREAM (副作用)</div>
+              <div class="downstream-node">📧 EmailNotification.sendStatusAlert()</div>
+              <div class="downstream-node">📊 AuditLog.recordStatusChange()</div>
+              <div class="downstream-node">🔒 SessionManager.invalidateAll()</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Upstream / Downstream Analysis -->
+      <div class="section" id="auditSection" style="display:none;">
+        <div class="audit-grid">
+          <div class="audit-card">
+            <div class="audit-card-header">
+              <div class="audit-dot dot-purple"></div>
+              <div>
+                <div class="audit-card-title">Upstream 數據源頭驗證</div>
+                <div class="audit-card-subtitle">upstream_verification · JSON 輸出欄位</div>
+              </div>
+            </div>
+            <textarea class="audit-textarea" placeholder="根據 GitNexus 圖譜，指出數據來源的假設是否成立。
+
+例如：
+• getUserStatus 的數據源頭是 UserRepository，但其查詢條件 findById() 未過濾 deletedAt，假設「只有 active 用戶會調用此 API」並不成立。
+• AuthService.verifyToken() 的 token 有效期假設為 24h，但實際 Redis 快取設定為 30min，存在不一致。" id="upstreamText"></textarea>
+          </div>
+
+          <div class="audit-card">
+            <div class="audit-card-header">
+              <div class="audit-dot dot-emerald"></div>
+              <div>
+                <div class="audit-card-title">Downstream 副作用評估</div>
+                <div class="audit-card-subtitle">downstream_impact · JSON 輸出欄位</div>
+              </div>
+            </div>
+            <textarea class="audit-textarea" placeholder="根據 GitNexus 圖譜，指出改動會橫向或往下波及哪些模組/API。
+
+例如：
+• 修改 getUserStatus 回傳邏輯，直接影響下游 3 個消費方：
+  1. EmailNotification（狀態觸發邏輯需對應調整）
+  2. AuditLog（事件類型 key 將改變，影響歷史查詢）
+  3. SessionManager（提前 invalidate 可能影響並發請求）" id="downstreamText"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: Hard Code Detector -->
+      <div class="section" id="detectorSection" style="display:none;">
+        <div class="detector">
+          <div class="detector-header">
+            <div class="detector-title">
+              🚨 Strict Critic · Hard Code & UI 遮醜偵測器
+            </div>
+            <span style="font-size:11px;color:var(--text-muted)">點擊項目標記狀態</span>
+          </div>
+          <div class="detector-items">
+            <div class="detector-item" onclick="toggleDetector(this, true)">
+              <div class="detector-status status-neutral" id="d1s">?</div>
+              <div class="detector-item-content">
+                <div class="detector-item-title">前端 CSS 隱藏 / display:none 遮蓋</div>
+                <div class="detector-item-desc">以視覺方式掩蓋問題，後端資料仍存在缺陷，屬於 UI 遮醜</div>
+              </div>
+            </div>
+            <div class="detector-item" onclick="toggleDetector(this, true)">
+              <div class="detector-status status-neutral" id="d2s">?</div>
+              <div class="detector-item-content">
+                <div class="detector-item-title">魔法數字 / 字串硬編碼</div>
+                <div class="detector-item-desc">例如 if (status === 'ACTIVE') 寫死於邏輯中，未使用 Enum 或常量定義</div>
+              </div>
+            </div>
+            <div class="detector-item" onclick="toggleDetector(this, true)">
+              <div class="detector-status status-neutral" id="d3s">?</div>
+              <div class="detector-item-content">
+                <div class="detector-item-title">臨時補丁 / 註解標記 TODO/HACK/FIXME</div>
+                <div class="detector-item-desc">承認是短期妥協，但未規劃移除時程或 Ticket，等於永久技術債</div>
+              </div>
+            </div>
+            <div class="detector-item" onclick="toggleDetector(this, false)">
+              <div class="detector-status status-neutral" id="d4s">?</div>
+              <div class="detector-item-content">
+                <div class="detector-item-title">✅ 修改遵循現有架構模式</div>
+                <div class="detector-item-desc">改動符合 GitNexus 圖譜中既有的抽象層與責任分離設計</div>
+              </div>
+            </div>
+            <div class="detector-item" onclick="toggleDetector(this, false)">
+              <div class="detector-status status-neutral" id="d5s">?</div>
+              <div class="detector-item-content">
+                <div class="detector-item-title">✅ 有對應的單元測試覆蓋邊界條件</div>
+                <div class="detector-item-desc">修改後的邏輯有測試覆蓋 null / error / concurrent 等邊界</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="actions" id="actionsSection" style="display:none;">
+        <button class="btn btn-secondary" onclick="location.href='01_prior_hypotheses_align.html'">← Stage 01</button>
+        <button class="btn btn-reject" onclick="triggerReject()">🚫 觸發 Strict Critic 拒絕</button>
+        <button class="btn btn-primary" onclick="location.href='03_architectural_tradeoff.html'">
+          通過 → 進入 Stage 03 架構辯證
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let rejectTriggered = false;
+
+    function runAudit() {
+      const fp = document.getElementById('filePath').value.trim();
+      const fn = document.getElementById('funcName').value.trim();
+      if (!fp || !fn) { alert('請輸入 File Path 與 Function Name'); return; }
+
+      document.getElementById('graphTarget').textContent = fn + ' · ' + fp;
+      document.getElementById('centerNode').textContent = fn;
+      document.getElementById('flowGraphSection').style.display = 'block';
+      document.getElementById('auditSection').style.display = 'block';
+      document.getElementById('detectorSection').style.display = 'block';
+      document.getElementById('actionsSection').style.display = 'flex';
+
+      document.getElementById('flowGraphSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function toggleDetector(el, isRisk) {
+      const s = el.querySelector('.detector-status');
+      if (el.classList.contains('triggered')) {
+        el.classList.remove('triggered');
+        s.className = 'detector-status status-neutral';
+        s.textContent = '?';
+      } else if (el.classList.contains('clear')) {
+        el.classList.remove('clear');
+        s.className = 'detector-status status-neutral';
+        s.textContent = '?';
+      } else {
+        if (isRisk) {
+          el.classList.add('triggered');
+          s.className = 'detector-status status-triggered';
+          s.textContent = '!';
+          checkAutoReject();
+        } else {
+          el.classList.add('clear');
+          s.className = 'detector-status status-clear';
+          s.textContent = '✓';
+        }
+      }
+    }
+
+    function checkAutoReject() {
+      const triggered = document.querySelectorAll('.detector-item.triggered').length;
+      if (triggered > 0 && !rejectTriggered) {
+        rejectTriggered = true;
+        document.getElementById('rejectBanner').style.display = 'block';
+        document.getElementById('rejectBanner').scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    function triggerReject() {
+      rejectTriggered = true;
+      document.getElementById('rejectBanner').style.display = 'block';
+      document.getElementById('rejectBanner').scrollIntoView({ behavior: 'smooth' });
+    }
+  </script>
+</body>
+</html>

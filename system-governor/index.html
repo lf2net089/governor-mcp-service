@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Governor · 系統治理主控台</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-void: #020408;
+      --bg-deep: #050c14;
+      --bg-surface: #0a1628;
+      --bg-card: rgba(10, 25, 47, 0.7);
+      --border-subtle: rgba(99, 179, 237, 0.08);
+      --border-active: rgba(99, 179, 237, 0.25);
+      --accent-cyan: #38bdf8;
+      --accent-blue: #3b82f6;
+      --accent-purple: #a78bfa;
+      --accent-amber: #fbbf24;
+      --accent-emerald: #34d399;
+      --accent-rose: #f43f5e;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #475569;
+      --glow-cyan: 0 0 30px rgba(56, 189, 248, 0.15);
+      --glow-purple: 0 0 30px rgba(167, 139, 250, 0.15);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-void);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Animated grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(56,189,248,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56,189,248,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -20%;
+      width: 60%;
+      height: 100%;
+      background: radial-gradient(ellipse, rgba(56,189,248,0.04) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(56,189,248,0.08);
+      border: 1px solid rgba(56,189,248,0.2);
+      border-radius: 100px;
+      padding: 6px 16px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: var(--accent-cyan);
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    h1 {
+      font-size: clamp(36px, 5vw, 64px);
+      font-weight: 900;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #e2e8f0 0%, #38bdf8 50%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 560px;
+      margin: 0 auto;
+      line-height: 1.7;
+    }
+
+    /* Stats bar */
+    .stats-bar {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      margin-top: 40px;
+      flex-wrap: wrap;
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 12px 20px;
+      backdrop-filter: blur(12px);
+    }
+
+    .stat-icon { font-size: 18px; }
+    .stat-label { font-size: 12px; color: var(--text-muted); }
+    .stat-value { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+
+    /* Pipeline */
+    .pipeline {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 48px;
+      overflow-x: auto;
+      padding: 8px 0;
+    }
+
+    .pipeline-stage {
+      flex: 1;
+      min-width: 180px;
+      position: relative;
+    }
+
+    .pipeline-stage::after {
+      content: '→';
+      position: absolute;
+      right: -14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 20px;
+      z-index: 2;
+    }
+
+    .pipeline-stage:last-child::after { display: none; }
+
+    .pipeline-node {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+
+    .pipeline-node:hover {
+      border-color: var(--border-active);
+      transform: translateY(-2px);
+    }
+
+    .pipeline-node.stage-1:hover { box-shadow: 0 0 20px rgba(251,191,36,0.1); }
+    .pipeline-node.stage-2:hover { box-shadow: 0 0 20px rgba(56,189,248,0.1); }
+    .pipeline-node.stage-3:hover { box-shadow: 0 0 20px rgba(167,139,250,0.1); }
+
+    .pipeline-num {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .stage-1 .pipeline-num { color: var(--accent-amber); }
+    .stage-2 .pipeline-num { color: var(--accent-cyan); }
+    .stage-3 .pipeline-num { color: var(--accent-purple); }
+
+    .pipeline-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    /* Workflow cards */
+    .workflows {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+
+    .workflow-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 32px;
+      backdrop-filter: blur(20px);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      text-decoration: none;
+      display: block;
+    }
+
+    .workflow-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .workflow-card:hover { transform: translateY(-4px); }
+    .workflow-card:hover::before { opacity: 1; }
+
+    .card-amber::before { background: linear-gradient(90deg, transparent, var(--accent-amber), transparent); }
+    .card-cyan::before { background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent); }
+    .card-purple::before { background: linear-gradient(90deg, transparent, var(--accent-purple), transparent); }
+
+    .card-amber:hover { border-color: rgba(251,191,36,0.25); box-shadow: 0 20px 60px rgba(251,191,36,0.08); }
+    .card-cyan:hover { border-color: rgba(56,189,248,0.25); box-shadow: 0 20px 60px rgba(56,189,248,0.08); }
+    .card-purple:hover { border-color: rgba(167,139,250,0.25); box-shadow: 0 20px 60px rgba(167,139,250,0.08); }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .card-icon {
+      font-size: 32px;
+      line-height: 1;
+    }
+
+    .card-step {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+
+    .card-amber .card-step { color: var(--accent-amber); background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2); }
+    .card-cyan .card-step { color: var(--accent-cyan); background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2); }
+    .card-purple .card-step { color: var(--accent-purple); background: rgba(167,139,250,0.08); border: 1px solid rgba(167,139,250,0.2); }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .card-checklist {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .card-checklist li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .check-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      flex-shrink: 0;
+    }
+
+    .card-amber .check-icon { background: rgba(251,191,36,0.1); color: var(--accent-amber); border: 1px solid rgba(251,191,36,0.2); }
+    .card-cyan .check-icon { background: rgba(56,189,248,0.1); color: var(--accent-cyan); border: 1px solid rgba(56,189,248,0.2); }
+    .card-purple .check-icon { background: rgba(167,139,250,0.1); color: var(--accent-purple); border: 1px solid rgba(167,139,250,0.2); }
+
+    .card-cta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .card-amber .card-cta { background: rgba(251,191,36,0.08); color: var(--accent-amber); border: 1px solid rgba(251,191,36,0.15); }
+    .card-cyan .card-cta { background: rgba(56,189,248,0.08); color: var(--accent-cyan); border: 1px solid rgba(56,189,248,0.15); }
+    .card-purple .card-cta { background: rgba(167,139,250,0.08); color: var(--accent-purple); border: 1px solid rgba(167,139,250,0.15); }
+
+    /* Schema panel */
+    .schema-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 32px;
+      backdrop-filter: blur(20px);
+      margin-bottom: 32px;
+    }
+
+    .schema-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .schema-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .schema-title span { color: var(--accent-cyan); }
+
+    .schema-tree {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.8;
+      color: var(--text-secondary);
+    }
+
+    .schema-key { color: #93c5fd; }
+    .schema-type { color: #86efac; }
+    .schema-required { color: var(--accent-rose); font-size: 10px; margin-left: 6px; }
+    .schema-desc { color: var(--text-muted); font-size: 11px; }
+    .schema-indent { padding-left: 20px; }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding-top: 32px;
+      border-top: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .footer strong { color: var(--text-secondary); }
+
+    /* Principles */
+    .principles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 48px;
+    }
+
+    .principle {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 20px;
+      backdrop-filter: blur(12px);
+    }
+
+    .principle-num {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      letter-spacing: 0.08em;
+    }
+
+    .principle-text {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .principle-text strong { color: var(--accent-cyan); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="badge">
+        <span class="badge-dot"></span>
+        System Governor v1.0 · 知識圖譜驅動治理框架
+      </div>
+      <h1>System Governor</h1>
+      <p class="subtitle">
+        結合 GitNexus 知識圖譜與理性懷疑論的終極系統治理者。<br>
+        萬物皆可遲疑，合理求證，不輕易將就。
+      </p>
+      <div class="stats-bar">
+        <div class="stat-item">
+          <span class="stat-icon">🔍</span>
+          <div>
+            <div class="stat-label">核心工具</div>
+            <div class="stat-value">GitNexus</div>
+          </div>
+        </div>
+        <div class="stat-item">
+          <span class="stat-icon">🔄</span>
+          <div>
+            <div class="stat-label">狀態機框架</div>
+            <div class="stat-value">LangGraph</div>
+          </div>
+        </div>
+        <div class="stat-item">
+          <span class="stat-icon">⚖️</span>
+          <div>
+            <div class="stat-label">裁判框架</div>
+            <div class="stat-value">AutoGen · CrewAI</div>
+          </div>
+        </div>
+        <div class="stat-item">
+          <span class="stat-icon">📐</span>
+          <div>
+            <div class="stat-label">審查維度</div>
+            <div class="stat-value">五維閉環</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline visualization -->
+    <div class="pipeline">
+      <div class="pipeline-stage">
+        <div class="pipeline-node stage-1" onclick="location.href='01_prior_hypotheses_align.html'">
+          <div class="pipeline-num">Stage 01</div>
+          <div class="pipeline-label">假設對齊</div>
+        </div>
+      </div>
+      <div class="pipeline-stage">
+        <div class="pipeline-node stage-2" onclick="location.href='02_gitnexus_flow_audit.html'">
+          <div class="pipeline-num">Stage 02</div>
+          <div class="pipeline-label">圖譜剖析</div>
+        </div>
+      </div>
+      <div class="pipeline-stage">
+        <div class="pipeline-node stage-3" onclick="location.href='03_architectural_tradeoff.html'">
+          <div class="pipeline-num">Stage 03</div>
+          <div class="pipeline-label">架構辯證</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Core principles -->
+    <div class="principles">
+      <div class="principle">
+        <div class="principle-num">原則 01</div>
+        <div class="principle-text"><strong>萬物遲疑</strong><br>假設是什麼？隱藏了什麼代價？邏輯斷代在哪裡？</div>
+      </div>
+      <div class="principle">
+        <div class="principle-num">原則 02</div>
+        <div class="principle-text"><strong>圖譜實證</strong><br>所有因果分析建立在 GitNexus 實證，拒絕憑空想像。</div>
+      </div>
+      <div class="principle">
+        <div class="principle-num">原則 03</div>
+        <div class="principle-text"><strong>嚴禁將就</strong><br>UI 遮醜、硬編碼觸發自動拒絕，強制長期方案。</div>
+      </div>
+      <div class="principle">
+        <div class="principle-num">原則 04</div>
+        <div class="principle-text"><strong>閉環輸出</strong><br>所有回應包裹於 JSON Schema，確保自動化解析不飄移。</div>
+      </div>
+    </div>
+
+    <!-- Workflow Cards -->
+    <div class="workflows">
+      <a href="01_prior_hypotheses_align.html" class="workflow-card card-amber">
+        <div class="card-header">
+          <span class="card-icon">🎯</span>
+          <span class="card-step">Step 01</span>
+        </div>
+        <div class="card-title">先理思路，再動手</div>
+        <div class="card-desc">
+          檢驗 PM 需求假設完整性，強制釐清邊界條件。
+          拒絕片段描述，阻斷一切「聽起來合理」的假設。
+        </div>
+        <ul class="card-checklist">
+          <li><span class="check-icon">①</span>核心因果與問題定義</li>
+          <li><span class="check-icon">②</span>需求完整性三檢門檻</li>
+          <li><span class="check-icon">③</span>邊界假設矛盾偵測</li>
+          <li><span class="check-icon">④</span>業務目標污染掃描</li>
+        </ul>
+        <div class="card-cta">
+          <span>開啟假設對齊審查</span>
+          <span>→</span>
+        </div>
+      </a>
+
+      <a href="02_gitnexus_flow_audit.html" class="workflow-card card-cyan">
+        <div class="card-header">
+          <span class="card-icon">🔬</span>
+          <span class="card-step">Step 02</span>
+        </div>
+        <div class="card-title">GitNexus 圖譜全鏈路剖析</div>
+        <div class="card-desc">
+          調用 GitNexus 追蹤資料從哪來、往哪去。
+          偵測 Hard Code、UI 遮醜，強制系統性溯源。
+        </div>
+        <ul class="card-checklist">
+          <li><span class="check-icon">↑</span>Upstream 數據源頭驗證</li>
+          <li><span class="check-icon">↓</span>Downstream 副作用評估</li>
+          <li><span class="check-icon">⚠</span>Hard Code 自動偵測</li>
+          <li><span class="check-icon">✗</span>局部最佳化幻想破除</li>
+        </ul>
+        <div class="card-cta">
+          <span>開啟 GitNexus 流程審查</span>
+          <span>→</span>
+        </div>
+      </a>
+
+      <a href="03_architectural_tradeoff.html" class="workflow-card card-purple">
+        <div class="card-header">
+          <span class="card-icon">⚖️</span>
+          <span class="card-step">Step 03</span>
+        </div>
+        <div class="card-title">不將就的架構辯證</div>
+        <div class="card-desc">
+          透過多角色裁判（Strict Critic / Defender / Judge）
+          輸出 JSON Schema 結構化決策，生成長期防禦方案。
+        </div>
+        <ul class="card-checklist">
+          <li><span class="check-icon">A</span>方案 A 短期成本 vs 長期熵增</li>
+          <li><span class="check-icon">B</span>方案 B 實作成本 vs 資產保護</li>
+          <li><span class="check-icon">❓</span>閉環反問生成</li>
+          <li><span class="check-icon">📋</span>JSON 格式輸出合約</li>
+        </ul>
+        <div class="card-cta">
+          <span>開啟架構辯證決策</span>
+          <span>→</span>
+        </div>
+      </a>
+    </div>
+
+    <!-- JSON Schema reference -->
+    <div class="schema-panel">
+      <div class="schema-header">
+        <div class="schema-title">
+          📐 Output Contract — <span>SystemGovernorResponse</span> JSON Schema
+        </div>
+        <span style="font-size:11px;color:var(--text-muted);">draft-07</span>
+      </div>
+      <div class="schema-tree">
+        <div>{ <span class="schema-key">"$schema"</span>: <span class="schema-type">"http://json-schema.org/draft-07/schema#"</span> }</div>
+        <br>
+        <div><span class="schema-key">rational_skepticism</span> <span class="schema-required">required</span></div>
+        <div class="schema-indent"><span class="schema-key">└ blind_spot</span>: <span class="schema-type">string</span> <span class="schema-desc">// 一針見血的思維漏洞指出</span></div>
+        <br>
+        <div><span class="schema-key">gitnexus_flow_audit</span> <span class="schema-required">required</span></div>
+        <div class="schema-indent"><span class="schema-key">├ upstream_verification</span>: <span class="schema-type">string</span> <span class="schema-desc">// 數據來源假設驗證</span></div>
+        <div class="schema-indent"><span class="schema-key">└ downstream_impact</span>: <span class="schema-type">string</span> <span class="schema-desc">// 橫向/向下波及模組</span></div>
+        <br>
+        <div><span class="schema-key">architectural_tradeoff</span> <span class="schema-required">required</span></div>
+        <div class="schema-indent"><span class="schema-key">├ option_a_short_term</span></div>
+        <div class="schema-indent" style="padding-left:40px"><span class="schema-key">├ immediate_cost</span>: <span class="schema-type">string</span></div>
+        <div class="schema-indent" style="padding-left:40px"><span class="schema-key">└ long_term_risk_and_entropy</span>: <span class="schema-type">string</span></div>
+        <div class="schema-indent"><span class="schema-key">└ option_b_long_term</span></div>
+        <div class="schema-indent" style="padding-left:40px"><span class="schema-key">├ implementation_cost</span>: <span class="schema-type">string</span></div>
+        <div class="schema-indent" style="padding-left:40px"><span class="schema-key">└ asset_value_protection</span>: <span class="schema-type">string</span></div>
+        <br>
+        <div><span class="schema-key">system_reflection_question</span>: <span class="schema-type">string</span> <span class="schema-required">required</span> <span class="schema-desc">// 閉環反問</span></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <strong>System-Governor-Workflow</strong> &nbsp;·&nbsp; GitNexus + LangGraph + AutoGen + CrewAI &nbsp;·&nbsp;
+      五維閉環審查 SOP &nbsp;·&nbsp; <span style="color: var(--accent-emerald);">Draft · Not Installed</span>
+    </div>
+  </div>
+</body>
+</html>
