@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  system-governor-mcp:
+    build:
+      context: ..
+      dockerfile: dist/Dockerfile
+    container_name: system-governor-mcp
+    ports:
+      - "${MCP_PORT:-9090}:${MCP_PORT:-9090}"
+      - "9091:9091"  # Web Viewer port
+    volumes:
+      # Persistent data: SQLite DB + generated reports
+      - ./data:${DATA_DIR:-/data}
+    environment:
+      - DATA_DIR=${DATA_DIR:-/data}
+      - DB_PATH=${DB_PATH:-/data/governor.db}
+      - REPORTS_DIR=${REPORTS_DIR:-/data/reports}
+      - MCP_HOST=${MCP_HOST:-0.0.0.0}
+      - MCP_PORT=${MCP_PORT:-9090}
+      - REMINDER_THRESHOLD_MINUTES=${REMINDER_THRESHOLD_MINUTES:-10}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://${MCP_HOST}:${MCP_PORT}/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

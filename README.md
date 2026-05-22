@@ -6,19 +6,31 @@
 
 ## 快速啟動
 
+### 方式 1：Docker 容器（推薦）
 ```bash
-# 安裝（首次）
+# 進入部署目錄
+cd dist/
+
+# 啟動服務（自動下載 ~120MB 鏡像）
+docker compose up
+```
+
+### 方式 2：本地安裝（需要 Docker）
+```bash
+# 一鍵安裝與配置
 bash install.sh
 
-# 確認服務
+# 確認 MCP 服務
 curl http://localhost:9090/health
-
-# 訪問決策檔案庫
-open http://localhost:9090/archive
-
-# 卸載
-bash uninstall.sh
 ```
+
+### 訪問決策檔案庫
+```bash
+# 打開網頁查看器
+open http://localhost:9091/archive
+```
+
+詳細部署選項見 [dist/README.md](dist/README.md)
 
 ---
 
@@ -26,6 +38,12 @@ bash uninstall.sh
 
 ```
 pipagent/
+│
+├── dist/                   ← 🐳 Docker 部署包（推薦）
+│   ├── Dockerfile          ← 優化版本（alpine，~120MB）
+│   ├── docker-compose.yml  ← 快速啟動配置
+│   ├── .env.example        ← 環境變數範本
+│   └── README.md           ← 部署指南
 │
 ├── install.sh              ← 一鍵安裝（Docker + mcp_config 寫入）
 ├── uninstall.sh            ← 一鍵卸載（互動式確認）
@@ -35,6 +53,9 @@ pipagent/
 │   ├── 01_prior_hypotheses_align.html
 │   ├── 02_gitnexus_flow_audit.html
 │   └── 03_architectural_tradeoff.html
+│
+├── .github/workflows/      ← GitHub Actions 自動化
+│   └── release.yml         ← 自動構建 & 發佈 Docker 鏡像
 │
 └── mcp-service/            ← Docker MCP 服務（核心）
     ├── server.py           ← FastMCP 主入口 (HTTP/SSE :9090)

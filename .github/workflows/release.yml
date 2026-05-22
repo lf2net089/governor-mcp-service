@@ -1,0 +1,82 @@
+name: Build & Release Docker Image
+
+on:
+  push:
+    tags:
+      - 'v*'  # 推送 tag 時觸發，如 v1.0.0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from tag
+        id: meta
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "image=ghcr.io/${{ github.repository_owner }}/system-governor" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./dist/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+            ${{ steps.meta.outputs.image }}:latest
+          labels: |
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/Dockerfile
+            dist/docker-compose.yml
+            dist/.dockerignore
+            dist/README.md
+          body: |
+            # System Governor MCP — v${{ steps.meta.outputs.version }}
+
+            ## 部署方式
+
+            ### 快速啟動（推薦）
+            ```bash
+            docker pull ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+            docker compose up
+            ```
+
+            ### 本地構建
+            ```bash
+            docker build -f dist/Dockerfile -t system-governor:local .
+            docker compose up
+            ```
+
+            ## 可用端點
+            - **MCP 工具**：http://localhost:9090/mcp
+            - **Web 查看器**：http://localhost:9091/archive ⭐
+            - **健康檢查**：http://localhost:9091/health
+
+            ## 鏡像大小
+            ~120MB（優化 alpine 版本）
+
+            詳細文檔見 `dist/README.md`
