@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash /Users/pericchen/Project/pipagent/install.sh)",
+      "Bash(docker compose *)",
+      "Bash(curl -sf http://localhost:8080/health)",
+      "Bash(curl -s http://localhost:8080/)",
+      "Bash(docker exec *)",
+      "Bash(curl -s http://localhost:8080/mcp -H \"Content-Type: application/json\" -d '{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"tools/list\"}')",
+      "Bash(curl -s http://localhost:8080/mcp -H \"Accept: application/json, text/event-stream\" -H \"Content-Type: application/json\" -d '{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"tools/list\"}')",
+      "Bash(python3 test_e2e.py)",
+      "Bash(pip install *)",
+      "Bash(python3 /Users/pericchen/Project/pipagent/test_e2e.py)",
+      "Bash(pip3 install *)",
+      "Bash(chmod +x /tmp/test_mcp.sh)",
+      "Bash(bash /tmp/test_mcp.sh)",
+      "Bash(docker cp *)",
+      "Bash(npx gitnexus *)"
+    ]
+  }
+}
