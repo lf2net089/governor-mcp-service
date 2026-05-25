@@ -18,7 +18,11 @@
       "Bash(npx gitnexus *)",
       "Bash(docker-compose down *)",
       "Bash(bash install.sh)",
-      "Bash(bash ../install.sh)"
+      "Bash(bash ../install.sh)",
+      "Bash(\n# 重置安装状态和 CLAUDE.md\nrm -f /Users/pericchen/Project/pipagent/.install_status\ncp ~/.claude/CLAUDE.md.backup.20260522171422 ~/.claude/CLAUDE.md\n\n# 运行安装脚本\nbash /Users/pericchen/Project/pipagent/install.sh 2>&1 | tail -40\n)"
+    ],
+    "additionalDirectories": [
+      "/Users/pericchen/.claude"
     ]
   }
 }

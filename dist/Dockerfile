@@ -21,8 +21,8 @@ RUN mkdir -p /data/reports/memo /data/reports/traces /data/reports/full
 # Expose ports: 9090 for MCP, 9091 for Web Viewer
 EXPOSE 9090 9091
 
-# Health check
+# Health check (Web Viewer 提供 health 端點)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:9090/health')" || exit 1
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:9091/health')" || exit 1
 
 ENTRYPOINT ["bash", "entrypoint.sh"]

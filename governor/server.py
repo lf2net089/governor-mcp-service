@@ -11,7 +11,7 @@ import uvicorn
 from fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, JSONResponse
-from starlette.routing import Route
+from starlette.routing import Route, Mount
 from starlette.middleware.cors import CORSMiddleware
 
 from core.db import init_db
@@ -663,61 +663,6 @@ def _generate_archive_html(sessions_data):
 
 # ─── ASGI 包裝器 ──────────────────────────────────────────────────────────────
 
-class HealthAndArchiveMiddleware:
-    def __init__(self, mcp_app):
-        self.mcp_app = mcp_app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] == "http":
-            path = scope["path"]
-            if path == "/health":
-                await handle_health_asgi(scope, receive, send)
-                return
-            elif path == "/archive":
-                await handle_archive_asgi(scope, receive, send)
-                return
-        await self.mcp_app(scope, receive, send)
-
-
-async def handle_health_asgi(scope, receive, send):
-    """ASGI 健康檢查"""
-    response = JSONResponse({"status": "ok", "service": "system-governor-mcp", "tools": 15})
-    await response(scope, receive, send)
-
-
-async def handle_archive_asgi(scope, receive, send):
-    """ASGI 決策檔案庫"""
-    db_path = os.environ.get("DB_PATH", "/data/governor.db")
-    sessions_data = []
-    async with aiosqlite.connect(db_path) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM sessions ORDER BY created_at DESC") as cur:
-            sessions = await cur.fetchall()
-            for session in sessions:
-                sid = session["id"]
-                session_dict = dict(session)
-                async with db.execute(
-                    "SELECT stage, role, content, created_at FROM records WHERE session_id=? ORDER BY created_at",
-                    (sid,)
-                ) as rec_cur:
-                    records = await rec_cur.fetchall()
-                    session_dict["records"] = [dict(r) for r in records]
-                async with db.execute(
-                    "SELECT stage, status, completed_at FROM stage_progress WHERE session_id=? ORDER BY stage",
-                    (sid,)
-                ) as stage_cur:
-                    stages = await stage_cur.fetchall()
-                    session_dict["stages"] = [dict(s) for s in stages]
-                async with db.execute(
-                    "SELECT report_type, file_path, generated_at FROM reports WHERE session_id=? ORDER BY generated_at DESC",
-                    (sid,)
-                ) as rep_cur:
-                    reports = await rep_cur.fetchall()
-                    session_dict["reports"] = [dict(r) for r in reports]
-                sessions_data.append(session_dict)
-    html_content = _generate_archive_html(sessions_data)
-    response = HTMLResponse(content=html_content)
-    await response(scope, receive, send)
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────
@@ -726,17 +671,14 @@ async def main():
     # 初始化 DB
     await init_db()
     print(f"✅ System Governor MCP Service 啟動中...")
-    print(f"📡 HTTP/SSE: http://{HOST}:{PORT}")
-    print(f"🏥 Health:   http://{HOST}:{PORT}/health")
-    print(f"📊 Archive:  http://{HOST}:{PORT}/archive")
+    print(f"📡 HTTP/SSE: http://{HOST}:{PORT}/mcp")
+    print(f"🏥 Health:   http://localhost:9091/health")
+    print(f"📊 Archive:  http://localhost:9091/archive")
     print(f"🗄️  DB:      {os.environ.get('DB_PATH', '/data/governor.db')}")
     print(f"📁 Reports:  {os.environ.get('REPORTS_DIR', '/data/reports')}")
 
-    # 用 ASGI 中介軟體包裝 FastMCP，添加自定義路由
-    app = HealthAndArchiveMiddleware(mcp)
-    config = uvicorn.Config(app, host=HOST, port=PORT, log_level="info")
-    server = uvicorn.Server(config)
-    await server.serve()
+    # 使用 FastMCP 的 HTTP 服務器啟動 MCP
+    await mcp.run_http_async(host=HOST, port=PORT)
 
 
 if __name__ == "__main__":

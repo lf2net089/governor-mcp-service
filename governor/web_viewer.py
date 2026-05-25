@@ -740,13 +740,16 @@ def _generate_session_detail_html(session_data):
     <div class="container">
         <a href="/archive" class="back-link">← 返回檔案庫</a>
         <header>
-            <h1>📋 {session_data.get("topic", "未命名")}</h1>
+"""
+    ]
+
+    topic = session_data.get("topic", "未命名")
+    html_parts.append(f"""            <h1>📋 {topic}</h1>
             <p>完整的決策流程與評估過程</p>
         </header>
 
         <div class="content">
-"""
-    ]
+""")
 
     records = session_data.get('records', [])
     stages = session_data.get('stages', [])
